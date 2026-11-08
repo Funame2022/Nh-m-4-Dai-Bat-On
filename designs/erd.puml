@@ -1,0 +1,74 @@
+@startuml
+' Tránh góc bo tròn mặc định để sơ đồ góc cạnh, hiện đại
+skinparam linetype ortho
+
+entity "User (Tài khoản)" as User {
+  + user_id : int <<PK>>
+  --
+  username : varchar
+  password_hash : varchar
+  role : enum (Admin, Parent, Staff)
+  email : varchar
+  phone : varchar
+}
+
+entity "Parent (Phụ huynh)" as Parent {
+  + parent_id : int <<PK>>
+  --
+  user_id : int <<FK>>
+  full_name : varchar
+  address : varchar
+}
+
+entity "Student (Học sinh)" as Student {
+  + student_id : int <<PK>>
+  --
+  parent_id : int <<FK>>
+  route_id : int <<FK>>
+  full_name : varchar
+  class_name : varchar
+}
+
+entity "Route (Tuyến đường)" as Route {
+  + route_id : int <<PK>>
+  --
+  route_name : varchar
+  start_point : varchar
+  end_point : varchar
+}
+
+entity "Bus (Xe buýt)" as Bus {
+  + bus_id : int <<PK>>
+  --
+  plate_number : varchar
+  capacity : int
+  driver_name : varchar
+}
+
+entity "Trip (Chuyến đi)" as Trip {
+  + trip_id : int <<PK>>
+  --
+  route_id : int <<FK>>
+  bus_id : int <<FK>>
+  trip_date : date
+  status : varchar
+}
+
+entity "Attendance (Điểm danh)" as Attendance {
+  + attendance_id : int <<PK>>
+  --
+  trip_id : int <<FK>>
+  student_id : int <<FK>>
+  status : enum (Present, Absent, PickedUp, DroppedOff)
+  timestamp : datetime
+}
+
+User ||--o{ Parent : "liên kết"
+Parent ||--o{ Student : "quản lý"
+Route ||--o{ Student : "thuộc tuyến"
+Route ||--o{ Trip : "được phân công"
+Bus ||--o{ Trip : "thực hiện"
+Trip ||--o{ Attendance : "ghi nhận"
+Student ||--o{ Attendance : "có dữ liệu"
+
+@enduml

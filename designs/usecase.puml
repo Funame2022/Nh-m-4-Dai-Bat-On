@@ -1,0 +1,35 @@
+@startuml
+left to right direction
+
+actor "Phụ huynh" as Parent
+actor "Nhân viên / Tài xế" as Staff
+actor "Quản trị viên" as Admin
+
+package "Hệ thống Quản lý Xe buýt Học sinh" {
+  usecase "Đăng nhập hệ thống" as UC_Login
+  usecase "Quản lý Tuyến & Điểm dừng" as UC_ManagerRoute
+  usecase "Xếp học sinh lên tuyến/xe" as UC_Assign
+  usecase "Giám sát chuyến đi thời gian thực" as UC_Monitor
+  usecase "Xem báo cáo thống kê" as UC_Report
+  
+  usecase "Điểm danh LÊN/XƯỞNG xe" as UC_CheckIn
+  usecase "Xem lộ trình & GPS" as UC_Route
+  usecase "Đăng ký nghỉ/vắng" as UC_Absence
+  usecase "Xem lịch sử chuyến đi" as UC_History
+}
+
+Parent --> UC_Login
+Parent --> UC_Route
+Parent --> UC_Absence
+Parent --> UC_History
+
+Staff --> UC_Login
+Staff --> UC_CheckIn
+
+Admin --> UC_Login
+Admin --> UC_ManagerRoute
+Admin --> UC_Assign
+Admin --> UC_Monitor
+Admin --> UC_Report
+
+@enduml

@@ -1,0 +1,185 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../config/api_config.dart';
+import '../models/nguoi_dung.dart';
+import 'token_storage.dart';
+
+class AuthException implements Exception {
+  const AuthException(this.message, {this.statusCode, this.retryable = false});
+
+  final String message;
+  final int? statusCode;
+  final bool retryable;
+
+  @override
+  String toString() => message;
+}
+
+class AuthService {
+  AuthService({
+    required http.Client client,
+    required TokenStorage storage,
+    required String baseUrl,
+  }) : this._(client, storage, baseUrl.trim());
+
+  AuthService._(this._client, this._storage, this.baseUrl);
+
+  final http.Client _client;
+  final TokenStorage _storage;
+  final String baseUrl;
+
+  static const Duration _timeout = Duration(seconds: 20);
+
+  bool get daCauHinh => baseUrl.isNotEmpty;
+
+  Future<String?> readRememberedEmail() => _storage.readRememberedEmail();
+
+  Future<void> rememberEmail(String email) =>
+      _storage.saveRememberedEmail(email);
+
+  Future<void> clearRememberedEmail() => _storage.clearRememberedEmail();
+
+  Future<String?> readThemeMode() => _storage.readThemeMode();
+
+  Future<void> saveThemeMode(String themeMode) =>
+      _storage.saveThemeMode(themeMode);
+
+  Uri _uri(String path) {
+    final goc = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    return Uri.parse('$goc$path');
+  }
+
+  Future<NguoiDung> login({
+    required String email,
+    required String matKhau,
+  }) async {
+    if (!daCauHinh) {
+      throw const AuthException(ApiConfig.thongDiepChuaCauHinh);
+    }
+
+    http.Response response;
+    try {
+      response = await _client
+          .post(
+            _uri('/api/auth/dang-nhap'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'email': email, 'matKhau': matKhau}),
+          )
+          .timeout(_timeout);
+    } on Exception {
+      throw const AuthException(
+        'Không thể kết nối máy chủ. Vui lòng thử lại.',
+        retryable: true,
+      );
+    }
+
+    if (response.statusCode == 401) {
+      throw const AuthException('Sai email hoặc mật khẩu.', statusCode: 401);
+    }
+
+    if (response.statusCode != 200) {
+      throw AuthException(
+        'Đăng nhập thất bại (mã ${response.statusCode}).',
+        statusCode: response.statusCode,
+        retryable: response.statusCode >= 500,
+      );
+    }
+
+    try {
+      final json = jsonDecode(response.body);
+      if (json is! Map<String, dynamic>) {
+        throw const FormatException('Phản hồi không phải JSON object');
+      }
+
+      final token = json['token'];
+      final nguoiDungJson = json['nguoiDung'];
+      if (token is! String ||
+          token.isEmpty ||
+          nguoiDungJson is! Map<String, dynamic>) {
+        throw const FormatException('Thiếu token hoặc người dùng');
+      }
+
+      final nguoiDung = NguoiDung.fromJson(nguoiDungJson);
+      if (!nguoiDung.laQuanLy) {
+        throw const AuthException(
+          'Tài khoản không có quyền quản lý.',
+          statusCode: 403,
+        );
+      }
+
+      await _storage.saveToken(token);
+      return nguoiDung;
+    } on AuthException {
+      rethrow;
+    } on FormatException {
+      throw const AuthException('Phản hồi đăng nhập không hợp lệ.');
+    } catch (_) {
+      throw const AuthException('Không thể đọc phản hồi đăng nhập.');
+    }
+  }
+
+  Future<NguoiDung?> restoreSession() async {
+    final token = await _storage.readToken();
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    http.Response response;
+    try {
+      response = await _client
+          .get(
+            _uri('/api/auth/toi'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(_timeout);
+    } on Exception {
+      throw const AuthException(
+        'Không thể kết nối máy chủ. Vui lòng thử lại.',
+        retryable: true,
+      );
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await _storage.clearToken();
+      return null;
+    }
+
+    if (response.statusCode != 200) {
+      throw AuthException(
+        'Không thể kiểm tra phiên đăng nhập (mã ${response.statusCode}).',
+        statusCode: response.statusCode,
+        retryable: response.statusCode >= 500,
+      );
+    }
+
+    try {
+      final json = jsonDecode(response.body);
+      if (json is! Map<String, dynamic>) {
+        throw const FormatException('Phản hồi không phải JSON object');
+      }
+
+      final nguoiDung = NguoiDung.fromJson(json);
+      if (!nguoiDung.laQuanLy) {
+        await _storage.clearToken();
+        return null;
+      }
+      return nguoiDung;
+    } catch (_) {
+      await _storage.clearToken();
+      return null;
+    }
+  }
+
+  Future<void> logout() => _storage.clearToken();
+}

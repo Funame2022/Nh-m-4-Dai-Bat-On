@@ -1,7 +1,9 @@
 ﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('node:http');
 const { truyVan } = require('./db');
+const { ganKenhGiamSat } = require('./giamSatSocket');
 
 const app = express();
 app.use(cors());
@@ -22,4 +24,6 @@ app.use('/api/van-hanh', require('./routes/vanHanh'));
 app.use('/api/phu-huynh', require('./routes/phuHuynh'));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server dang chay tai cong ' + PORT));
+const server = http.createServer(app);
+ganKenhGiamSat(server);
+server.listen(PORT, () => console.log('Server dang chay tai cong ' + PORT));

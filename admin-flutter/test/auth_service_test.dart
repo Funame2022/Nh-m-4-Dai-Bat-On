@@ -210,6 +210,55 @@ void main() {
     });
   });
 
+  group('cài đặt tài khoản', () {
+    test('đổi tên gửi PATCH có xác thực và đọc hồ sơ mới', () async {
+      final storage = FakeTokenStorage('saved-token');
+      late http.Request request;
+      final client = MockClient((req) async {
+        request = req;
+        return jsonResponse({
+          'id': 1,
+          'email': 'admin@xetruong.vn',
+          'ho_ten': 'Quản trị viên mới',
+          'vai_tro': 'QUAN_LY',
+        }, 200);
+      });
+
+      final user = await taoAuthService(
+        client,
+        storage,
+      ).doiTen('Quản trị viên mới');
+
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/auth/toi');
+      expect(request.headers['Authorization'], 'Bearer saved-token');
+      expect(jsonDecode(request.body), {'hoTen': 'Quản trị viên mới'});
+      expect(user.hoTen, 'Quản trị viên mới');
+    });
+
+    test('đổi mật khẩu chỉ gửi dữ liệu trong phiên đã xác thực', () async {
+      final storage = FakeTokenStorage('saved-token');
+      late http.Request request;
+      final client = MockClient((req) async {
+        request = req;
+        return jsonResponse({'thongBao': 'Đã đổi mật khẩu'}, 200);
+      });
+
+      await taoAuthService(client, storage).doiMatKhau(
+        matKhauHienTai: 'MatKhauCu123!',
+        matKhauMoi: 'MatKhauMoi123!',
+      );
+
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/auth/mat-khau');
+      expect(request.headers['Authorization'], 'Bearer saved-token');
+      expect(jsonDecode(request.body), {
+        'matKhauHienTai': 'MatKhauCu123!',
+        'matKhauMoi': 'MatKhauMoi123!',
+      });
+    });
+  });
+
   test('logout xóa token', () async {
     final storage = FakeTokenStorage('saved-token');
     final client = MockClient((_) async => http.Response('', 500));

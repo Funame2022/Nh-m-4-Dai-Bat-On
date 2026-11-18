@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const { truyVan } = require('../db');
 const { xacThuc, choPhep } = require('../middleware/auth');
+const { phatCapNhatGps } = require('../giamSatSocket');
 
 const router = express.Router();
 router.use(xacThuc, choPhep('TAI_XE', 'BAO_MAU', 'QUAN_LY'));
@@ -132,12 +133,36 @@ router.post('/chuyen/:id/vi-tri', async (req, res) => {
     if (!(await kiemTraQuyenChuyen(req.params.id, req.nguoiDung))) {
       return res.status(403).json({ loi: 'Không có quyền cập nhật vị trí chuyến này' });
     }
-    const { viDo, kinhDo } = req.body;
+    const { viDo, kinhDo } = req.body || {};
+    if (
+      !Number.isFinite(viDo) ||
+      !Number.isFinite(kinhDo) ||
+      viDo < -90 || viDo > 90 ||
+      kinhDo < -180 || kinhDo > 180
+    ) {
+      return res.status(400).json({ loi: 'Tọa độ GPS không hợp lệ' });
+    }
+
+    const chuyen = await truyVan(
+      "SELECT id FROM chuyen_di WHERE id = $1 AND trang_thai = 'DANG_CHAY'",
+      [req.params.id],
+    );
+    if (!chuyen.rows[0]) {
+      return res.status(409).json({ loi: 'Chỉ có thể gửi GPS khi chuyến đang chạy' });
+    }
+
     const kq = await truyVan(
       'INSERT INTO vi_tri_xe (chuyen_di_id, vi_do, kinh_do) VALUES ($1, $2, $3) RETURNING *',
       [req.params.id, viDo, kinhDo]
     );
-    res.status(201).json(kq.rows[0]);
+    const viTri = kq.rows[0];
+    await phatCapNhatGps({
+      chuyen_di_id: viTri.chuyen_di_id,
+      vi_do: viTri.vi_do,
+      kinh_do: viTri.kinh_do,
+      thoi_diem: viTri.thoi_diem,
+    });
+    res.status(201).json(viTri);
   } catch (e) { res.status(400).json({ loi: e.message }); }
 });
 

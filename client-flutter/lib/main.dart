@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 const String baseUrl = 'https://nh-m-4-dai-bat-on.onrender.com';
@@ -82,9 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
         } else {
-          setState(
-            () => _error = 'Tài khoản Quản lý vui lòng dùng App Admin Android!',
-          );
+          setState(() => _error = 'Vui lòng dùng ứng dụng Admin để đăng nhập');
         }
       } else {
         setState(() => _error = data['loi'] ?? 'Sai email hoặc mật khẩu');
@@ -231,22 +232,80 @@ class _LoginScreenState extends State<LoginScreen> {
 // ==========================================
 // 2. MÀN HÌNH TÀI XẾ & BẢO MẪU (/api/van-hanh)
 // ==========================================
+class GpsCoordinates {
+  const GpsCoordinates({required this.latitude, required this.longitude});
+
+  final double latitude;
+  final double longitude;
+}
+
+abstract interface class GpsLocationSource {
+  Future<bool> isServiceEnabled();
+  Future<LocationPermission> checkPermission();
+  Future<LocationPermission> requestPermission();
+  Stream<GpsCoordinates> get positions;
+}
+
+class _DeviceGpsLocationSource implements GpsLocationSource {
+  const _DeviceGpsLocationSource();
+
+  @override
+  Future<bool> isServiceEnabled() => Geolocator.isLocationServiceEnabled();
+
+  @override
+  Future<LocationPermission> checkPermission() => Geolocator.checkPermission();
+
+  @override
+  Future<LocationPermission> requestPermission() =>
+      Geolocator.requestPermission();
+
+  @override
+  Stream<GpsCoordinates> get positions =>
+      Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 15,
+        ),
+      ).map(
+        (position) => GpsCoordinates(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        ),
+      );
+}
+
 class VanHanhScreen extends StatefulWidget {
   final String token;
   final Map<String, dynamic> user;
+  final GpsLocationSource? gpsLocationSource;
+  final http.Client? client;
 
-  const VanHanhScreen({super.key, required this.token, required this.user});
+  const VanHanhScreen({
+    super.key,
+    required this.token,
+    required this.user,
+    this.gpsLocationSource,
+    this.client,
+  });
 
   @override
   State<VanHanhScreen> createState() => _VanHanhScreenState();
 }
 
-class _VanHanhScreenState extends State<VanHanhScreen> {
+class _VanHanhScreenState extends State<VanHanhScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
   Map<String, dynamic>? _chuyen;
   List<dynamic> _diemDung = [];
   List<dynamic> _hocSinh = [];
   String? _loi;
+  String? _loiGps;
+  StreamSubscription<GpsCoordinates>? _gpsSubscription;
+  bool _dangGuiGps = false;
+  late final http.Client _client = widget.client ?? http.Client();
+  bool get _tuSoHuuHttpClient => widget.client == null;
+  GpsLocationSource get _gpsSource =>
+      widget.gpsLocationSource ?? const _DeviceGpsLocationSource();
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
@@ -256,7 +315,31 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _taiChuyenHomNay();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_gpsSubscription?.cancel());
+    if (_tuSoHuuHttpClient) _client.close();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_chuyen?['trang_thai'] == 'DANG_CHAY') {
+        unawaited(_batDauTheoDoiGps(_chuyen!['id'] as int));
+      }
+      return;
+    }
+
+    final subscription = _gpsSubscription;
+    _gpsSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    if (mounted) setState(() {});
   }
 
   Future<void> _taiChuyenHomNay() async {
@@ -265,7 +348,7 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
       _loi = null;
     });
     try {
-      final res = await http.get(
+      final res = await _client.get(
         Uri.parse('$baseUrl/api/van-hanh/chuyen-hom-nay'),
         headers: _headers,
       );
@@ -273,10 +356,13 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
         final dsChuyen = jsonDecode(res.body) as List;
         if (dsChuyen.isEmpty) {
           setState(() => _chuyen = null);
+          final subscription = _gpsSubscription;
+          _gpsSubscription = null;
+          if (subscription != null) await subscription.cancel();
           return;
         }
         final chuyenId = dsChuyen[0]['id'];
-        final resChiTiet = await http.get(
+        final resChiTiet = await _client.get(
           Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId'),
           headers: _headers,
         );
@@ -287,6 +373,14 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
             _diemDung = ct['diemDung'] ?? [];
             _hocSinh = ct['hocSinh'] ?? [];
           });
+          if (_chuyen?['trang_thai'] == 'DANG_CHAY' &&
+              widget.user['vaiTro'] == 'TAI_XE') {
+            await _batDauTheoDoiGps(chuyenId as int);
+          } else {
+            final subscription = _gpsSubscription;
+            _gpsSubscription = null;
+            if (subscription != null) await subscription.cancel();
+          }
         }
       } else {
         setState(
@@ -301,7 +395,7 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
   }
 
   Future<void> _batDauChuyen(int chuyenId) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId/bat-dau'),
       headers: _headers,
     );
@@ -314,7 +408,7 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
   }
 
   Future<void> _ketThucChuyen(int chuyenId, {bool boQua = false}) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId/ket-thuc'),
       headers: _headers,
       body: jsonEncode({'xacNhanBoQua': boQua}),
@@ -332,16 +426,74 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
     }
   }
 
-  Future<void> _guiToaDoGps(int chuyenId) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId/vi-tri'),
-      headers: _headers,
-      body: jsonEncode({'viDo': 10.7755, 'kinhDo': 106.6950}),
-    );
-    if (res.statusCode == 201 || res.statusCode == 200) {
-      _thongBao('Đã gửi tọa độ GPS xe (10.7755, 106.6950)!');
-    } else {
-      _thongBao('Lỗi gửi GPS');
+  Future<void> _batDauTheoDoiGps(int chuyenId) async {
+    if (widget.user['vaiTro'] != 'TAI_XE' ||
+        _gpsSubscription != null ||
+        _chuyen?['trang_thai'] != 'DANG_CHAY') {
+      return;
+    }
+
+    try {
+      if (!await _gpsSource.isServiceEnabled()) {
+        _thongBao('Hãy bật dịch vụ vị trí để chia sẻ GPS của chuyến xe.');
+        return;
+      }
+
+      var permission = await _gpsSource.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await _gpsSource.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _thongBao('Cần cấp quyền vị trí khi dùng ứng dụng để gửi GPS.');
+        return;
+      }
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        _thongBao('Thiết bị chưa cấp quyền truy cập vị trí.');
+        return;
+      }
+
+      if (!mounted || _chuyen?['trang_thai'] != 'DANG_CHAY') return;
+      setState(() => _loiGps = null);
+      _gpsSubscription = _gpsSource.positions.listen(
+        (coordinates) => unawaited(
+          _guiToaDoGps(chuyenId, coordinates.latitude, coordinates.longitude),
+        ),
+        onError: (Object _) {
+          if (mounted) {
+            setState(() => _loiGps = 'Không nhận được vị trí GPS từ thiết bị.');
+          }
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loiGps = 'Không thể khởi động dịch vụ vị trí.');
+        _thongBao(_loiGps!);
+      }
+    }
+  }
+
+  Future<void> _guiToaDoGps(int chuyenId, double viDo, double kinhDo) async {
+    if (_dangGuiGps) return;
+    _dangGuiGps = true;
+    try {
+      final res = await _client
+          .post(
+            Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId/vi-tri'),
+            headers: _headers,
+            body: jsonEncode({'viDo': viDo, 'kinhDo': kinhDo}),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        if (_loiGps != null && mounted) setState(() => _loiGps = null);
+      } else if (mounted) {
+        setState(() => _loiGps = 'Máy chủ chưa nhận được vị trí GPS mới.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loiGps = 'Mất kết nối khi gửi vị trí GPS.');
+    } finally {
+      _dangGuiGps = false;
     }
   }
 
@@ -351,7 +503,7 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
     int? diemDungId,
     String suKien,
   ) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$baseUrl/api/van-hanh/chuyen/$chuyenId/diem-danh'),
       headers: _headers,
       body: jsonEncode({
@@ -451,16 +603,28 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              FilledButton.icon(
-                                onPressed: () => _batDauChuyen(_chuyen!['id']),
-                                icon: const Icon(Icons.play_arrow),
-                                label: const Text('Bắt đầu chạy'),
-                              ),
-                              FilledButton.tonalIcon(
-                                onPressed: () => _guiToaDoGps(_chuyen!['id']),
-                                icon: const Icon(Icons.my_location),
-                                label: const Text('Gửi vị trí GPS'),
-                              ),
+                              if (_chuyen!['trang_thai'] != 'DANG_CHAY')
+                                FilledButton.icon(
+                                  onPressed: () =>
+                                      _batDauChuyen(_chuyen!['id']),
+                                  icon: const Icon(Icons.play_arrow),
+                                  label: const Text('Bắt đầu chạy'),
+                                ),
+                              if (_chuyen!['trang_thai'] == 'DANG_CHAY' &&
+                                  laTaiXe)
+                                Chip(
+                                  avatar: Icon(
+                                    _gpsSubscription == null
+                                        ? Icons.location_searching
+                                        : Icons.my_location,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    _gpsSubscription == null
+                                        ? 'Đang chờ GPS'
+                                        : 'Đang chia sẻ GPS',
+                                  ),
+                                ),
                               OutlinedButton.icon(
                                 onPressed: () => _ketThucChuyen(_chuyen!['id']),
                                 icon: const Icon(Icons.check_circle),
@@ -468,6 +632,13 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
                               ),
                             ],
                           ),
+                        if (_loiGps != null && laTaiXe) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _loiGps!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -550,21 +721,62 @@ class _VanHanhScreenState extends State<VanHanhScreen> {
 // ==========================================
 // 3. MÀN HÌNH PHỤ HUYNH (/api/phu-huynh)
 // ==========================================
+abstract interface class ParentGpsConnection {
+  Stream<dynamic> get messages;
+  Future<void> close();
+}
+
+class _IoParentGpsConnection implements ParentGpsConnection {
+  const _IoParentGpsConnection(this._socket);
+
+  final WebSocket _socket;
+
+  @override
+  Stream<dynamic> get messages => _socket;
+
+  @override
+  Future<void> close() => _socket.close();
+}
+
+typedef ParentGpsConnector = Future<ParentGpsConnection> Function(
+  Uri uri,
+  Map<String, String> headers,
+);
+
 class PhuHuynhScreen extends StatefulWidget {
   final String token;
   final Map<String, dynamic> user;
+  final http.Client? client;
+  final ParentGpsConnector? gpsConnector;
 
-  const PhuHuynhScreen({super.key, required this.token, required this.user});
+  const PhuHuynhScreen({
+    super.key,
+    required this.token,
+    required this.user,
+    this.client,
+    this.gpsConnector,
+  });
 
   @override
   State<PhuHuynhScreen> createState() => _PhuHuynhScreenState();
 }
 
 class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
+  static const List<int> _thoiGianThuLai = [1, 2, 4, 8, 16, 30];
   bool _loading = true;
   List<dynamic> _danhSachCon = [];
-  List<dynamic> _theoDoi = [];
+  Map<int, List<dynamic>> _theoDoi = {};
+  int? _hocSinhDangChonId;
   String? _loi;
+  bool _dangKetNoiGps = false;
+  int _soLanThuLai = 0;
+  int _socketGeneration = 0;
+  StreamSubscription<dynamic>? _gpsSubscription;
+  ParentGpsConnection? _gpsConnection;
+  Timer? _timerThuLai;
+  Timer? _timerTrangThaiGps;
+  late final http.Client _client = widget.client ?? http.Client();
+  bool get _tuSoHuuHttpClient => widget.client == null;
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer ${widget.token}',
@@ -573,7 +785,20 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
   @override
   void initState() {
     super.initState();
+    _timerTrangThaiGps = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
     _taiThongTinTheoDoi();
+  }
+
+  @override
+  void dispose() {
+    _timerThuLai?.cancel();
+    _timerTrangThaiGps?.cancel();
+    unawaited(_gpsSubscription?.cancel());
+    unawaited(_gpsConnection?.close());
+    if (_tuSoHuuHttpClient) _client.close();
+    super.dispose();
   }
 
   Future<void> _taiThongTinTheoDoi() async {
@@ -582,41 +807,213 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
       _loi = null;
     });
     try {
-      final resCon = await http.get(
+      final resCon = await _client.get(
         Uri.parse('$baseUrl/api/phu-huynh/con-cua-toi'),
         headers: _headers,
       );
       if (resCon.statusCode == 200) {
-        final dsCon = jsonDecode(resCon.body) as List;
-        List<dynamic> dsTheoDoi = [];
-        if (dsCon.isNotEmpty) {
-          final hsId = dsCon[0]['id'];
-          final resTd = await http.get(
+        final dsCon = (jsonDecode(resCon.body) as List)
+            .cast<Map<String, dynamic>>();
+        final dsTheoDoi = <int, List<dynamic>>{};
+        for (final con in dsCon) {
+          final hsId = (con['id'] as num).toInt();
+          final resTd = await _client.get(
             Uri.parse('$baseUrl/api/phu-huynh/con/$hsId/theo-doi'),
             headers: _headers,
           );
           if (resTd.statusCode == 200) {
-            dsTheoDoi = jsonDecode(resTd.body) as List;
+            dsTheoDoi[hsId] = jsonDecode(resTd.body) as List<dynamic>;
+          } else {
+            throw const FormatException('Không thể tải hành trình học sinh.');
           }
         }
+        final selectedId =
+            dsCon.any((con) => (con['id'] as num).toInt() == _hocSinhDangChonId)
+            ? _hocSinhDangChonId
+            : dsCon.isEmpty
+            ? null
+            : (dsCon.first['id'] as num).toInt();
         setState(() {
           _danhSachCon = dsCon;
           _theoDoi = dsTheoDoi;
+          _hocSinhDangChonId = selectedId;
         });
+        if (selectedId != null) {
+          await _ketNoiTheoDoi(selectedId);
+        } else {
+          await _dongKetNoiGps();
+        }
       } else {
         setState(() => _loi = 'Lỗi tải dữ liệu (${resCon.statusCode})');
       }
     } catch (e) {
-      setState(() => _loi = 'Lỗi kết nối: $e');
+      if (mounted) setState(() => _loi = 'Không thể tải dữ liệu theo dõi.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<void> _dongKetNoiGps() async {
+    _socketGeneration += 1;
+    _timerThuLai?.cancel();
+    _timerThuLai = null;
+    final subscription = _gpsSubscription;
+    final connection = _gpsConnection;
+    _gpsSubscription = null;
+    _gpsConnection = null;
+    if (subscription != null) await subscription.cancel();
+    if (connection != null) await connection.close();
+    if (mounted) setState(() => _dangKetNoiGps = false);
+  }
+
+  Future<void> _ketNoiTheoDoi(int hocSinhId) async {
+    _timerThuLai?.cancel();
+    _timerThuLai = null;
+    final generation = ++_socketGeneration;
+    final subscription = _gpsSubscription;
+    final oldConnection = _gpsConnection;
+    _gpsSubscription = null;
+    _gpsConnection = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    if (oldConnection != null) unawaited(oldConnection.close());
+    if (!mounted || _hocSinhDangChonId != hocSinhId) return;
+
+    setState(() => _dangKetNoiGps = false);
+    try {
+      final baseUri = Uri.parse(baseUrl);
+      final uri = baseUri.replace(
+        scheme: baseUri.scheme == 'https' ? 'wss' : 'ws',
+        path: '/api/phu-huynh/theo-doi/ws',
+        queryParameters: {'hocSinhId': '$hocSinhId'},
+      );
+      final headers = _headers;
+      final connection = widget.gpsConnector != null
+          ? await widget.gpsConnector!(uri, headers)
+          : _IoParentGpsConnection(
+              await WebSocket.connect(
+                uri.toString(),
+                headers: headers,
+              ).timeout(const Duration(seconds: 10)),
+            );
+      if (!mounted ||
+          generation != _socketGeneration ||
+          _hocSinhDangChonId != hocSinhId) {
+        await connection.close();
+        return;
+      }
+      _gpsConnection = connection;
+      _soLanThuLai = 0;
+      setState(() => _dangKetNoiGps = true);
+      _gpsSubscription = connection.messages.listen(
+        (message) => _nhanCapNhatGps(hocSinhId, message),
+        onError: (Object _) => _matKetNoiGps(connection, hocSinhId),
+        onDone: () => _matKetNoiGps(connection, hocSinhId),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      if (mounted && generation == _socketGeneration) {
+        setState(() => _dangKetNoiGps = false);
+        _datLichThuLai(hocSinhId);
+      }
+    }
+  }
+
+  void _nhanCapNhatGps(int hocSinhId, dynamic message) {
+    if (message is! String || _hocSinhDangChonId != hocSinhId) return;
+    try {
+      final event = jsonDecode(message);
+      if (event is! Map<String, dynamic> || event['type'] != 'gps_updated') {
+        return;
+      }
+      final data = event['data'];
+      if (data is! Map<String, dynamic> ||
+          data['chuyen_di_id'] is! num ||
+          data['vi_do'] is! num ||
+          data['kinh_do'] is! num ||
+          data['thoi_diem'] is! String) {
+        return;
+      }
+      final chuyenId = (data['chuyen_di_id'] as num).toInt();
+      final timestamp = DateTime.tryParse(data['thoi_diem'] as String);
+      final journeys = _theoDoi[hocSinhId];
+      if (!mounted || timestamp == null || journeys == null) return;
+      final index = journeys.indexWhere(
+        (journey) => (journey['chuyen_di_id'] as num?)?.toInt() == chuyenId,
+      );
+      if (index < 0) return;
+
+      final old = journeys[index];
+      final oldTimestamp = DateTime.tryParse('${old['cap_nhat_luc'] ?? ''}');
+      if (oldTimestamp != null && timestamp.isBefore(oldTimestamp)) return;
+      final updated = List<dynamic>.of(journeys);
+      updated[index] = {
+        ...old,
+        'vi_do': (data['vi_do'] as num).toDouble(),
+        'kinh_do': (data['kinh_do'] as num).toDouble(),
+        'cap_nhat_luc': timestamp.toIso8601String(),
+      };
+      setState(() => _theoDoi[hocSinhId] = updated);
+    } on FormatException {
+      return;
+    }
+  }
+
+  void _matKetNoiGps(ParentGpsConnection connection, int hocSinhId) {
+    if (!mounted ||
+        !identical(_gpsConnection, connection) ||
+        _hocSinhDangChonId != hocSinhId) {
+      return;
+    }
+    _gpsConnection = null;
+    _gpsSubscription = null;
+    setState(() => _dangKetNoiGps = false);
+    _datLichThuLai(hocSinhId);
+  }
+
+  void _datLichThuLai(int hocSinhId) {
+    if (!mounted || _timerThuLai != null) return;
+    final index = _soLanThuLai.clamp(0, _thoiGianThuLai.length - 1);
+    _soLanThuLai += 1;
+    _timerThuLai = Timer(Duration(seconds: _thoiGianThuLai[index]), () {
+      _timerThuLai = null;
+      if (_hocSinhDangChonId == hocSinhId) {
+        unawaited(_ketNoiTheoDoi(hocSinhId));
+      }
+    });
+  }
+
+  void _chonHocSinh(int? hocSinhId) {
+    if (hocSinhId == null || hocSinhId == _hocSinhDangChonId) return;
+    setState(() {
+      _hocSinhDangChonId = hocSinhId;
+      _dangKetNoiGps = false;
+    });
+    unawaited(_ketNoiTheoDoi(hocSinhId));
+  }
+
+  String _dinhDangGps(dynamic timestamp) {
+    final parsed = DateTime.tryParse('$timestamp');
+    if (parsed == null) return 'Chưa có dữ liệu GPS';
+    final local = parsed.toLocal();
+    final isStale =
+        DateTime.now().difference(local) > const Duration(minutes: 2);
+    final formatted =
+        '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}';
+    return isStale ? 'GPS cũ • $formatted' : 'Cập nhật GPS • $formatted';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final chuyenHienTai = _theoDoi.isNotEmpty ? _theoDoi[0] : null;
-    final lichSu = (chuyenHienTai?['lich_su_diem_danh'] as List?) ?? [];
+    final journeys = _theoDoi[_hocSinhDangChonId] ?? const <dynamic>[];
+    final lichSu = journeys
+        .expand(
+          (journey) => (journey['lich_su_diem_danh'] as List?) ?? const [],
+        )
+        .toList();
+    final hocSinhDangChon = _danhSachCon.where(
+      (con) => (con['id'] as num?)?.toInt() == _hocSinhDangChonId,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -658,8 +1055,38 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
                       child: Text('Chưa liên kết học sinh nào.'),
                     ),
                   ),
-                ..._danhSachCon.map(
-                  (con) => Card(
+                if (_danhSachCon.isNotEmpty)
+                  Card(
+                    child: ListTile(
+                      title: const Text('Học sinh đang xem'),
+                      trailing: PopupMenuButton<int>(
+                        key: const Key('parent-child-selector'),
+                        tooltip: 'Chọn học sinh',
+                        onSelected: _chonHocSinh,
+                        itemBuilder: (context) => _danhSachCon.map((con) {
+                          final name = con['ho_ten'] ?? 'Học sinh';
+                          final code = con['ma_hs'] ?? '';
+                          return PopupMenuItem<int>(
+                            value: (con['id'] as num).toInt(),
+                            child: Text('$name ($code)'),
+                          );
+                        }).toList(),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Đổi'),
+                              SizedBox(width: 4),
+                              Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (hocSinhDangChon.isNotEmpty)
+                  Card(
                     color: Colors.teal.shade50,
                     child: ListTile(
                       leading: const Icon(
@@ -668,42 +1095,70 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
                         color: Colors.teal,
                       ),
                       title: Text(
-                        '${con['ho_ten']} (${con['ma_hs']})',
+                        '${hocSinhDangChon.first['ho_ten']} (${hocSinhDangChon.first['ma_hs']})',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        'Lớp: ${con['ten_lop']} - ${con['ten_truong']}\nQuan hệ: ${con['quan_he']}',
+                        'Lớp: ${hocSinhDangChon.first['ten_lop']} - ${hocSinhDangChon.first['ten_truong']}\nQuan hệ: ${hocSinhDangChon.first['quan_he']}',
                       ),
                       isThreeLine: true,
                     ),
                   ),
-                ),
                 const SizedBox(height: 16),
                 const Text(
                   'VỊ TRÍ XE TRƯỜNG & CHUYẾN ĐI HÔM NAY',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.location_on,
-                      color: Colors.red,
-                      size: 36,
+                if (_danhSachCon.isNotEmpty)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        _dangKetNoiGps ? Icons.wifi_tethering : Icons.sync,
+                        color: _dangKetNoiGps ? Colors.green : Colors.orange,
+                        size: 32,
+                      ),
+                      title: Text(
+                        _dangKetNoiGps
+                            ? 'Đang nhận cập nhật trực tiếp'
+                            : 'Đang kết nối lại với xe',
+                      ),
+                      subtitle: const Text(
+                        'Vị trí chỉ hiển thị khi chuyến thuộc học sinh đã liên kết.',
+                      ),
                     ),
-                    title: Text(
-                      chuyenHienTai != null
-                          ? '${chuyenHienTai['ten_tuyen']} (${chuyenHienTai['bien_so']}) - ${chuyenHienTai['trang_thai']}'
-                          : 'Hôm nay chưa có chuyến đi',
-                    ),
-                    subtitle: Text(
-                      chuyenHienTai?['vi_do'] != null
-                          ? 'Tọa độ GPS: ${chuyenHienTai['vi_do']}, ${chuyenHienTai['kinh_do']}\nTài xế: ${chuyenHienTai['ten_tai_xe']} (${chuyenHienTai['sdt_tai_xe']})'
-                          : 'Chưa có tín hiệu GPS mới từ tài xế',
-                    ),
-                    isThreeLine: true,
                   ),
-                ),
+                if (journeys.isEmpty && _danhSachCon.isNotEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Hôm nay chưa có chuyến đi được phân công.'),
+                    ),
+                  ),
+                ...journeys.map((journey) {
+                  final viDo = journey['vi_do'];
+                  final kinhDo = journey['kinh_do'];
+                  final coGps = viDo is num && kinhDo is num;
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.location_on,
+                        color: Colors.red,
+                        size: 36,
+                      ),
+                      title: Text(
+                        '${journey['ten_tuyen']} (${journey['bien_so']}) • ${journey['chieu'] == 'TRA_CHIEU' ? 'Trả chiều' : 'Đón sáng'}',
+                      ),
+                      subtitle: Text(
+                        '${journey['trang_thai']}\n'
+                        '${coGps ? 'Tọa độ GPS: $viDo, $kinhDo' : 'Chưa có dữ liệu GPS'}\n'
+                        '${_dinhDangGps(journey['cap_nhat_luc'])}\n'
+                        'Tài xế: ${journey['ten_tai_xe']} (${journey['sdt_tai_xe']})',
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                }),
                 const SizedBox(height: 16),
                 const Text(
                   'LỊCH SỬ ĐIỂM DANH LÊN / XUỐNG XE',

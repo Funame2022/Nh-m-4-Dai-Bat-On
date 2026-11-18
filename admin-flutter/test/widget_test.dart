@@ -71,6 +71,17 @@ Future<void> dangNhap(
   await tester.pumpAndSettle();
 }
 
+Future<void> moCaiDat(WidgetTester tester) async {
+  if (find.byKey(const Key('admin-drawer-button')).evaluate().isNotEmpty) {
+    await tester.tap(find.byKey(const Key('admin-drawer-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nav-drawer-settings')));
+  } else {
+    await tester.tap(find.text('Cài đặt').last);
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('đăng nhập QUAN_LY lưu token và mở Admin shell', (tester) async {
     final storage = FakeTokenStorage();
@@ -115,7 +126,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Xe Trường Admin'), findsOneWidget);
+    expect(find.text('BusCare For Admin'), findsOneWidget);
     expect(find.text('Đăng nhập dành cho quản lý'), findsOneWidget);
     final editablePassword = find.descendant(
       of: find.byKey(const Key('login-password')),
@@ -291,7 +302,14 @@ void main() {
     await pumpAdminApp(tester, storage: storage, client: client);
     expect(find.byKey(const Key('admin-shell')), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('logout-button')));
+    await moCaiDat(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-logout')),
+      240,
+    );
+    await tester.tap(find.byKey(const Key('settings-logout')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-confirm-action')));
     await tester.pumpAndSettle();
 
     expect(find.text('Đăng nhập dành cho quản lý'), findsOneWidget);
@@ -595,6 +613,8 @@ void main() {
   });
 
   testWidgets('theme sáng tối đổi ngay và ghi nhớ lựa chọn', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
     final storage = FakeTokenStorage('saved-token');
     await pumpAdminApp(
       tester,
@@ -606,7 +626,14 @@ void main() {
       Theme.of(tester.element(find.byKey(const Key('admin-shell')))).brightness,
       Brightness.light,
     );
-    await tester.tap(find.byKey(const Key('admin-theme-toggle')));
+    expect(find.byKey(const Key('admin-theme-toggle')), findsNothing);
+    expect(find.byKey(const Key('logout-button')), findsNothing);
+    await tester.tap(find.byKey(const Key('admin-drawer-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('drawer-theme-toggle')), findsNothing);
+    await tester.tap(find.byKey(const Key('nav-drawer-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-theme-toggle')));
     await tester.pumpAndSettle();
 
     expect(
@@ -615,6 +642,165 @@ void main() {
     );
     expect(storage.themeMode, 'dark');
     expect(storage.themeModeSaveCount, 1);
+  });
+
+  testWidgets('đổi tên trong Cài đặt cập nhật hồ sơ đang đăng nhập', (
+    tester,
+  ) async {
+    final storage = FakeTokenStorage('saved-token');
+    late http.Request request;
+    final client = MockClient((req) async {
+      if (req.url.path == '/api/auth/toi' && req.method == 'GET') {
+        return jsonResponse({
+          'id': 7,
+          'email': 'admin@xetruong.vn',
+          'ho_ten': 'Nguyễn Văn Quản Lý',
+          'vai_tro': 'QUAN_LY',
+        }, 200);
+      }
+      request = req;
+      return jsonResponse({
+        'id': 7,
+        'email': 'admin@xetruong.vn',
+        'ho_ten': 'Phú Admin',
+        'vai_tro': 'QUAN_LY',
+      }, 200);
+    });
+    await pumpAdminApp(tester, storage: storage, client: client);
+
+    await moCaiDat(tester);
+    await tester.tap(find.byKey(const Key('settings-rename')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('settings-name-field')),
+      'Phú Admin',
+    );
+    await tester.tap(find.byKey(const Key('settings-name-save')));
+    await tester.pumpAndSettle();
+
+    expect(request.method, 'PATCH');
+    expect(request.headers['Authorization'], 'Bearer saved-token');
+    expect(jsonDecode(request.body), {'hoTen': 'Phú Admin'});
+    expect(find.text('Phú Admin'), findsOneWidget);
+  });
+
+  testWidgets('đổi mật khẩu yêu cầu đủ thông tin rồi gửi yêu cầu xác thực', (
+    tester,
+  ) async {
+    final storage = FakeTokenStorage('saved-token');
+    late http.Request request;
+    final client = MockClient((req) async {
+      if (req.url.path == '/api/auth/toi' && req.method == 'GET') {
+        return jsonResponse({
+          'id': 7,
+          'email': 'admin@xetruong.vn',
+          'ho_ten': 'Nguyễn Văn Quản Lý',
+          'vai_tro': 'QUAN_LY',
+        }, 200);
+      }
+      request = req;
+      return jsonResponse({'thongBao': 'Đã đổi mật khẩu'}, 200);
+    });
+    await pumpAdminApp(tester, storage: storage, client: client);
+
+    await moCaiDat(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-change-password')),
+      240,
+    );
+    await tester.tap(find.byKey(const Key('settings-change-password')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('settings-current-password')),
+      'MatKhauCu123!',
+    );
+    await tester.enterText(
+      find.byKey(const Key('settings-new-password')),
+      'MatKhauMoi123!',
+    );
+    await tester.enterText(
+      find.byKey(const Key('settings-confirm-password')),
+      'MatKhauMoi123!',
+    );
+    await tester.tap(find.byKey(const Key('settings-password-save')));
+    await tester.pumpAndSettle();
+
+    expect(request.method, 'PATCH');
+    expect(request.url.path, '/api/auth/mat-khau');
+    expect(request.headers['Authorization'], 'Bearer saved-token');
+    expect(jsonDecode(request.body), {
+      'matKhauHienTai': 'MatKhauCu123!',
+      'matKhauMoi': 'MatKhauMoi123!',
+    });
+  });
+
+  testWidgets('lựa chọn thông báo được lưu trên thiết bị', (tester) async {
+    final storage = FakeTokenStorage('saved-token');
+    await pumpAdminApp(
+      tester,
+      storage: storage,
+      client: _FakeNavigationBackend().client,
+    );
+
+    await moCaiDat(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-notifications-toggle')),
+      240,
+    );
+    await tester.tap(find.byKey(const Key('settings-notifications-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(storage.notificationsEnabled, 'true');
+  });
+
+  testWidgets('đổi tài khoản xóa email đã ghi nhớ và mở màn hình đăng nhập', (
+    tester,
+  ) async {
+    final storage = FakeTokenStorage.withRememberedEmail(
+      token: 'saved-token',
+      rememberedEmail: 'cu@xetruong.vn',
+    );
+    await pumpAdminApp(
+      tester,
+      storage: storage,
+      client: _FakeNavigationBackend().client,
+    );
+
+    await moCaiDat(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-switch-account')),
+      240,
+    );
+    await tester.tap(find.byKey(const Key('settings-switch-account')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-confirm-action')));
+    await tester.pumpAndSettle();
+
+    expect(storage.token, isNull);
+    expect(storage.rememberedEmail, isNull);
+    expect(find.text('Đăng nhập dành cho quản lý'), findsOneWidget);
+  });
+
+  testWidgets('trang Cài đặt cuộn được trên màn hình điện thoại', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    await pumpAdminApp(
+      tester,
+      storage: FakeTokenStorage('saved-token'),
+      client: _FakeNavigationBackend().client,
+    );
+
+    await moCaiDat(tester);
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-about')),
+      200,
+    );
+
+    expect(find.byKey(const Key('settings-about')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('theme tối đã lưu được khôi phục khi mở lại ứng dụng', (

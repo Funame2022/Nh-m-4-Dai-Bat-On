@@ -165,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 14),
                                 Text(
-                                  'Xe Trường Admin',
+                                  'BusCare For Admin',
                                   textAlign: TextAlign.center,
                                   style: theme.textTheme.headlineSmall
                                       ?.copyWith(

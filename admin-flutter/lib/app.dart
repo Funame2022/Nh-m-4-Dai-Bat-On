@@ -117,7 +117,7 @@ class _AdminAppState extends State<AdminApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Xe Trường Admin',
+      title: 'BusCare For Admin',
       debugShowCheckedModeBanner: false,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
@@ -204,6 +204,17 @@ class _AuthGateState extends State<AuthGate> {
     setState(() => _nguoiDung = null);
   }
 
+  Future<void> _doiTaiKhoan() async {
+    await widget.authService.logout();
+    try {
+      await widget.authService.clearRememberedEmail();
+    } catch (_) {
+      // Continue to login even if the remembered account cannot be cleared.
+    }
+    if (!mounted) return;
+    setState(() => _nguoiDung = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_dangKhoiPhuc) {
@@ -246,7 +257,10 @@ class _AuthGateState extends State<AuthGate> {
     if (_nguoiDung != null) {
       return AdminShell(
         nguoiDung: _nguoiDung!,
+        authService: widget.authService,
         onLogout: _dangXuat,
+        onSwitchAccount: _doiTaiKhoan,
+        onUserUpdated: (user) => setState(() => _nguoiDung = user),
         quanLyService: widget.quanLyService,
         operationsService: widget.operationsService,
         isDark: widget.isDark,

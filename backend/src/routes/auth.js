@@ -34,4 +34,52 @@ router.get('/toi', xacThuc, async (req, res) => {
   res.json(kq.rows[0]);
 });
 
+router.patch('/toi', xacThuc, async (req, res) => {
+  const hoTen = typeof req.body?.hoTen === 'string' ? req.body.hoTen.trim() : '';
+  if (!hoTen || hoTen.length > 120) {
+    return res.status(400).json({ loi: 'Tên phải có từ 1 đến 120 ký tự' });
+  }
+
+  try {
+    const kq = await truyVan(
+      'UPDATE nguoi_dung SET ho_ten = $1 WHERE id = $2 RETURNING id, email, ho_ten, sdt, vai_tro',
+      [hoTen, req.nguoiDung.id],
+    );
+    if (!kq.rows[0]) return res.status(404).json({ loi: 'Không tìm thấy tài khoản' });
+    res.json(kq.rows[0]);
+  } catch (_) {
+    res.status(500).json({ loi: 'Không thể cập nhật tên tài khoản' });
+  }
+});
+
+router.patch('/mat-khau', xacThuc, async (req, res) => {
+  const { matKhauHienTai, matKhauMoi } = req.body || {};
+  if (typeof matKhauHienTai !== 'string' || typeof matKhauMoi !== 'string') {
+    return res.status(400).json({ loi: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới' });
+  }
+  if (matKhauMoi.length < 8 || Buffer.byteLength(matKhauMoi, 'utf8') > 72) {
+    return res.status(400).json({ loi: 'Mật khẩu mới phải từ 8 đến 72 byte' });
+  }
+
+  try {
+    const kq = await truyVan(
+      'SELECT mat_khau_hash FROM nguoi_dung WHERE id = $1',
+      [req.nguoiDung.id],
+    );
+    if (!kq.rows[0]) return res.status(404).json({ loi: 'Không tìm thấy tài khoản' });
+    if (!(await bcrypt.compare(matKhauHienTai, kq.rows[0].mat_khau_hash))) {
+      return res.status(400).json({ loi: 'Mật khẩu hiện tại không đúng' });
+    }
+
+    const hash = await bcrypt.hash(matKhauMoi, 10);
+    await truyVan('UPDATE nguoi_dung SET mat_khau_hash = $1 WHERE id = $2', [
+      hash,
+      req.nguoiDung.id,
+    ]);
+    res.json({ thongBao: 'Đã đổi mật khẩu' });
+  } catch (_) {
+    res.status(500).json({ loi: 'Không thể đổi mật khẩu' });
+  }
+});
+
 module.exports = router;

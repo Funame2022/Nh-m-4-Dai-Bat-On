@@ -6,6 +6,32 @@ const { xacThuc, choPhep } = require('../middleware/auth');
 const router = express.Router();
 router.use(xacThuc, choPhep('QUAN_LY'));
 
+const DS_CHIEU = ['DON_SANG', 'TRA_CHIEU'];
+
+function laIdDuong(giaTri) {
+  if (typeof giaTri !== 'string' || !/^[1-9]\d*$/.test(giaTri)) return false;
+  const so = Number(giaTri);
+  return Number.isSafeInteger(so) && so <= 2147483647;
+}
+
+function laSoNguyenDuong(giaTri) {
+  if (typeof giaTri !== 'number' && typeof giaTri !== 'string') return false;
+  if (typeof giaTri === 'string' && !/^[1-9]\d*$/.test(giaTri)) return false;
+  const so = Number(giaTri);
+  return Number.isSafeInteger(so) && so >= 1 && so <= 2147483647;
+}
+
+function laToaDo(giaTri, nhoNhat, lonNhat) {
+  if (typeof giaTri !== 'number' && typeof giaTri !== 'string') return false;
+  if (typeof giaTri === 'string' && giaTri.trim() === '') return false;
+  const so = Number(giaTri);
+  return Number.isFinite(so) && so >= nhoNhat && so <= lonNhat;
+}
+
+function laGioHopLe(giaTri) {
+  return typeof giaTri === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(giaTri);
+}
+
 // ================= 1. QUẢN LÝ TÀI XẾ & BẢO MẪU =================
 router.get('/tai-xe', async (req, res) => {
   const kq = await truyVan(`
@@ -167,12 +193,123 @@ router.put('/tuyen/:id', async (req, res) => {
   } catch (e) { res.status(400).json({ loi: e.message }); }
 });
 
+router.put('/tuyen/:tuyenId/diem-dung/:diemDungId', async (req, res) => {
+  const { tuyenId, diemDungId } = req.params;
+  if (!laIdDuong(tuyenId) || !laIdDuong(diemDungId)) {
+    return res.status(400).json({ loi: 'Ma tuyen hoac diem dung khong hop le' });
+  }
+
+  const body = req.body || {};
+  const { thuTu, ten, viDo, kinhDo, gioDuKien } = body;
+  const coGioDuKien = Object.prototype.hasOwnProperty.call(body, 'gioDuKien');
+
+  if (!laSoNguyenDuong(thuTu)) {
+    return res.status(400).json({ loi: 'thuTu phai la so nguyen duong' });
+  }
+  if (typeof ten !== 'string' || ten.trim() === '') {
+    return res.status(400).json({ loi: 'ten khong duoc de trong' });
+  }
+  if (!laToaDo(viDo, -90, 90)) {
+    return res.status(400).json({ loi: 'viDo phai nam trong khoang -90 den 90' });
+  }
+  if (!laToaDo(kinhDo, -180, 180)) {
+    return res.status(400).json({ loi: 'kinhDo phai nam trong khoang -180 den 180' });
+  }
+  if (!coGioDuKien || (gioDuKien !== null && !laGioHopLe(gioDuKien))) {
+    return res.status(400).json({ loi: 'gioDuKien phai la null hoac dinh dang HH:mm' });
+  }
+
+  const soTuyenId = Number(tuyenId);
+  const soDiemDungId = Number(diemDungId);
+  const soThuTu = Number(thuTu);
+  const tenDiemDung = ten.trim();
+  const soViDo = Number(viDo);
+  const soKinhDo = Number(kinhDo);
+
+  try {
+    const kq = await trongGiaoDich(async (client) => {
+      const tuyen = await client.query('SELECT id FROM tuyen WHERE id = $1 FOR UPDATE', [soTuyenId]);
+      if (!tuyen.rows[0]) {
+        const loi = new Error('Khong tim thay tuyen');
+        loi.trangThai = 404;
+        throw loi;
+      }
+
+      const diemDung = await client.query(
+        'SELECT id FROM diem_dung WHERE id = $1 AND tuyen_id = $2',
+        [soDiemDungId, soTuyenId]
+      );
+      if (!diemDung.rows[0]) {
+        const loi = new Error('Khong tim thay diem dung trong tuyen');
+        loi.trangThai = 404;
+        throw loi;
+      }
+
+      const trungThuTu = await client.query(
+        'SELECT id FROM diem_dung WHERE tuyen_id = $1 AND thu_tu = $2 AND id <> $3',
+        [soTuyenId, soThuTu, soDiemDungId]
+      );
+      if (trungThuTu.rows[0]) {
+        const loi = new Error('Thu tu diem dung da ton tai trong tuyen');
+        loi.trangThai = 409;
+        throw loi;
+      }
+
+      const capNhat = await client.query(
+        `UPDATE diem_dung
+         SET thu_tu = $1, ten = $2, vi_do = $3, kinh_do = $4, gio_du_kien = $5
+         WHERE id = $6 AND tuyen_id = $7
+         RETURNING *`,
+        [soThuTu, tenDiemDung, soViDo, soKinhDo, gioDuKien, soDiemDungId, soTuyenId]
+      );
+      return capNhat.rows[0];
+    });
+    res.json(kq);
+  } catch (e) {
+    res.status(e.trangThai || 400).json({ loi: e.message });
+  }
+});
+
 router.delete('/tuyen/:id', async (req, res) => {
   try {
-    await truyVan('DELETE FROM diem_dung WHERE tuyen_id = $1', [req.params.id]);
-    await truyVan('DELETE FROM tuyen WHERE id = $1', [req.params.id]);
-    res.json({ thongBao: 'Đã xóa tuyến' });
-  } catch (e) { res.status(400).json({ loi: e.message }); }
+    const ketQua = await trongGiaoDich(async (client) => {
+      const tuyen = await client.query(
+        'SELECT id FROM tuyen WHERE id = $1 FOR UPDATE',
+        [req.params.id]
+      );
+      if (!tuyen.rows[0]) {
+        const loi = new Error('Không tìm thấy tuyến');
+        loi.trangThai = 404;
+        throw loi;
+      }
+
+      const thamChieu = await client.query(`
+        SELECT
+          EXISTS(SELECT 1 FROM chuyen_di WHERE tuyen_id = $1) AS co_chuyen_di,
+          EXISTS(SELECT 1 FROM dang_ky_tuyen WHERE tuyen_id = $1) AS co_dang_ky
+      `, [req.params.id]);
+      if (thamChieu.rows[0].co_chuyen_di || thamChieu.rows[0].co_dang_ky) {
+        const loi = new Error(
+          'Không thể xóa tuyến vì vẫn còn chuyến đi hoặc học sinh đã đăng ký. ' +
+          'Vui lòng xử lý dữ liệu liên quan trước.'
+        );
+        loi.trangThai = 409;
+        throw loi;
+      }
+
+      await client.query(
+        'DELETE FROM diem_dung WHERE tuyen_id = $1',
+        [req.params.id]
+      );
+      await client.query(
+        'DELETE FROM tuyen WHERE id = $1',
+        [req.params.id]
+      );
+      return { thongBao: 'Đã xóa tuyến' };
+    });
+
+    res.json(ketQua);
+  } catch (e) { res.status(e.trangThai || 400).json({ loi: e.message }); }
 });
 
 // ================= 4. HỌC SINH, CHUYẾN ĐI & GIÁM SÁT =================
@@ -196,6 +333,55 @@ router.post('/hoc-sinh', async (req, res) => {
     );
     res.status(201).json(kq.rows[0]);
   } catch (e) { res.status(400).json({ loi: e.message }); }
+});
+
+router.get('/dang-ky-tuyen', async (req, res) => {
+  const { hocSinhId, tuyenId, chieu } = req.query;
+  if (hocSinhId !== undefined && !laIdDuong(hocSinhId)) {
+    return res.status(400).json({ loi: 'hocSinhId khong hop le' });
+  }
+  if (tuyenId !== undefined && !laIdDuong(tuyenId)) {
+    return res.status(400).json({ loi: 'tuyenId khong hop le' });
+  }
+  if (chieu !== undefined && !DS_CHIEU.includes(chieu)) {
+    return res.status(400).json({ loi: 'chieu khong hop le' });
+  }
+
+  const dieuKien = [];
+  const thamSo = [];
+  if (hocSinhId !== undefined) {
+    thamSo.push(Number(hocSinhId));
+    dieuKien.push(`dk.hoc_sinh_id = $${thamSo.length}`);
+  }
+  if (tuyenId !== undefined) {
+    thamSo.push(Number(tuyenId));
+    dieuKien.push(`dk.tuyen_id = $${thamSo.length}`);
+  }
+  if (chieu !== undefined) {
+    thamSo.push(chieu);
+    dieuKien.push(`dk.chieu = $${thamSo.length}`);
+  }
+
+  try {
+    const kq = await truyVan(`
+      SELECT dk.hoc_sinh_id, dk.tuyen_id, dk.diem_dung_id, dk.chieu,
+        hs.ma_hs, hs.ho_ten, hs.anh_url,
+        l.ten_lop, tr.ten AS ten_truong,
+        t.ten_tuyen,
+        dd.ten AS ten_diem_dung, dd.thu_tu AS thu_tu_diem_dung, dd.gio_du_kien
+      FROM dang_ky_tuyen dk
+      JOIN hoc_sinh hs ON dk.hoc_sinh_id = hs.id
+      JOIN lop l ON hs.lop_id = l.id
+      JOIN truong tr ON l.truong_id = tr.id
+      JOIN tuyen t ON dk.tuyen_id = t.id
+      JOIN diem_dung dd ON dk.diem_dung_id = dd.id
+      ${dieuKien.length ? `WHERE ${dieuKien.join(' AND ')}` : ''}
+      ORDER BY dk.hoc_sinh_id ASC, dk.chieu ASC
+    `, thamSo);
+    res.json(kq.rows);
+  } catch (e) {
+    res.status(500).json({ loi: e.message });
+  }
 });
 
 router.post('/dang-ky-tuyen', async (req, res) => {
@@ -226,11 +412,17 @@ router.post('/chuyen-di', async (req, res) => {
 router.get('/giam-sat', async (req, res) => {
   const chuyen = await truyVan(`
     SELECT cd.*, t.ten_tuyen, x.bien_so,
-      (SELECT vi_do FROM vi_tri_xe WHERE chuyen_di_id = cd.id ORDER BY thoi_diem DESC LIMIT 1) AS vi_do,
-      (SELECT kinh_do FROM vi_tri_xe WHERE chuyen_di_id = cd.id ORDER BY thoi_diem DESC LIMIT 1) AS kinh_do
+      vt.vi_do, vt.kinh_do, vt.thoi_diem AS vi_tri_cap_nhat_luc
     FROM chuyen_di cd
     JOIN tuyen t ON cd.tuyen_id = t.id
     JOIN xe x ON t.xe_id = x.id
+    LEFT JOIN LATERAL (
+      SELECT vi_do, kinh_do, thoi_diem
+      FROM vi_tri_xe
+      WHERE chuyen_di_id = cd.id
+      ORDER BY thoi_diem DESC, id DESC
+      LIMIT 1
+    ) vt ON TRUE
     WHERE cd.ngay = CURRENT_DATE
     ORDER BY cd.id DESC
   `);

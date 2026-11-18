@@ -12,6 +12,7 @@ class FakeTokenStorage implements TokenStorage {
   String? token;
   String? rememberedEmail;
   String? themeMode;
+  String? notificationsEnabled;
   int saveCount = 0;
   int clearCount = 0;
   int rememberedEmailSaveCount = 0;
@@ -55,5 +56,13 @@ class FakeTokenStorage implements TokenStorage {
   Future<void> saveThemeMode(String value) async {
     themeMode = value;
     themeModeSaveCount += 1;
+  }
+
+  @override
+  Future<String?> readNotificationsEnabled() async => notificationsEnabled;
+
+  @override
+  Future<void> saveNotificationsEnabled(bool enabled) async {
+    notificationsEnabled = '$enabled';
   }
 }

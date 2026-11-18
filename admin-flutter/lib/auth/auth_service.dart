@@ -47,6 +47,12 @@ class AuthService {
   Future<void> saveThemeMode(String themeMode) =>
       _storage.saveThemeMode(themeMode);
 
+  Future<bool> readNotificationsEnabled() async =>
+      await _storage.readNotificationsEnabled() == 'true';
+
+  Future<void> saveNotificationsEnabled(bool enabled) =>
+      _storage.saveNotificationsEnabled(enabled);
+
   Uri _uri(String path) {
     final goc = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
@@ -182,4 +188,76 @@ class AuthService {
   }
 
   Future<void> logout() => _storage.clearToken();
+
+  Future<NguoiDung> doiTen(String hoTen) async {
+    final json = await _authenticatedPatch('/api/auth/toi', {'hoTen': hoTen});
+    return NguoiDung.fromJson(json);
+  }
+
+  Future<void> doiMatKhau({
+    required String matKhauHienTai,
+    required String matKhauMoi,
+  }) async {
+    await _authenticatedPatch('/api/auth/mat-khau', {
+      'matKhauHienTai': matKhauHienTai,
+      'matKhauMoi': matKhauMoi,
+    });
+  }
+
+  Future<Map<String, dynamic>> _authenticatedPatch(
+    String path,
+    Map<String, Object?> body,
+  ) async {
+    if (!daCauHinh) {
+      throw const AuthException(ApiConfig.thongDiepChuaCauHinh);
+    }
+
+    final token = await _storage.readToken();
+    if (token == null || token.isEmpty) {
+      throw const AuthException(
+        'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    http.Response response;
+    try {
+      response = await _client
+          .patch(
+            _uri(path),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
+    } on Exception {
+      throw const AuthException(
+        'Không thể kết nối máy chủ. Vui lòng thử lại.',
+        retryable: true,
+      );
+    }
+
+    Map<String, dynamic> json;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Phản hồi không hợp lệ');
+      }
+      json = decoded;
+    } on FormatException {
+      throw const AuthException('Phản hồi máy chủ không hợp lệ.');
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = json['loi'];
+      throw AuthException(
+        message is String ? message : 'Không thể cập nhật tài khoản.',
+        statusCode: response.statusCode,
+        retryable: response.statusCode >= 500,
+      );
+    }
+    return json;
+  }
 }

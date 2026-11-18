@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../fleet/quan_ly_service.dart';
+import '../auth/auth_service.dart';
 import '../models/nguoi_dung.dart';
 import '../operations/quan_ly_operations_service.dart';
 import 'fleet/tai_xe_page.dart';
@@ -8,13 +9,17 @@ import 'fleet/xe_page.dart';
 import 'monitoring/giam_sat_page.dart';
 import 'reports/bao_cao_page.dart';
 import 'routes/tuyen_page.dart';
+import 'settings_screen.dart';
 import '../widgets/brand_background.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({
     super.key,
     required this.nguoiDung,
+    required this.authService,
     required this.onLogout,
+    required this.onSwitchAccount,
+    required this.onUserUpdated,
     required this.quanLyService,
     required this.operationsService,
     required this.isDark,
@@ -22,7 +27,10 @@ class AdminShell extends StatefulWidget {
   });
 
   final NguoiDung nguoiDung;
+  final AuthService authService;
   final Future<void> Function() onLogout;
+  final Future<void> Function() onSwitchAccount;
+  final ValueChanged<NguoiDung> onUserUpdated;
   final QuanLyService quanLyService;
   final QuanLyOperationsService operationsService;
   final bool isDark;
@@ -40,6 +48,7 @@ class _AdminShellState extends State<AdminShell> {
     'Tuyến',
     'Giám sát',
     'Báo cáo',
+    'Cài đặt',
   ];
   int _chiSo = 0;
 
@@ -63,6 +72,17 @@ class _AdminShellState extends State<AdminShell> {
         return GiamSatPage(service: widget.operationsService);
       case 5:
         return BaoCaoPage(service: widget.operationsService);
+      case 6:
+        return SettingsScreen(
+          nguoiDung: widget.nguoiDung,
+          authService: widget.authService,
+          isDark: widget.isDark,
+          onToggleTheme: widget.onToggleTheme,
+          onRename: widget.authService.doiTen,
+          onUserUpdated: widget.onUserUpdated,
+          onSwitchAccount: widget.onSwitchAccount,
+          onLogout: widget.onLogout,
+        );
       default:
         return _TongQuanPage(
           nguoiDung: widget.nguoiDung,
@@ -93,28 +113,6 @@ class _AdminShellState extends State<AdminShell> {
                     ),
                   ),
             title: Text(_tieuDe[_chiSo]),
-            actions: [
-              IconButton(
-                key: const Key('admin-theme-toggle'),
-                tooltip: widget.isDark
-                    ? 'Chuyển sang giao diện sáng'
-                    : 'Chuyển sang giao diện tối',
-                onPressed: () => widget.onToggleTheme(),
-                icon: Icon(
-                  widget.isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                ),
-              ),
-              IconButton(
-                key: const Key('logout-button'),
-                tooltip: 'Đăng xuất',
-                onPressed: () async {
-                  await widget.onLogout();
-                },
-                icon: const Icon(Icons.logout),
-              ),
-            ],
           ),
           drawer: rong
               ? null
@@ -145,7 +143,7 @@ class _AdminShellState extends State<AdminShell> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Xe Trường Admin',
+                                    'BusCare For Admin',
                                     style: Theme.of(drawerContext)
                                         .textTheme
                                         .titleSmall,
@@ -166,22 +164,6 @@ class _AdminShellState extends State<AdminShell> {
                       ),
                       const Divider(indent: 20, endIndent: 20),
                       ..._drawerDestinations,
-                      const Divider(indent: 20, endIndent: 20),
-                      ListTile(
-                        key: const Key('drawer-theme-toggle'),
-                        leading: Icon(
-                          widget.isDark
-                              ? Icons.light_mode_outlined
-                              : Icons.dark_mode_outlined,
-                        ),
-                        title: Text(
-                          widget.isDark ? 'Giao diện sáng' : 'Giao diện tối',
-                        ),
-                        onTap: () {
-                          Navigator.of(drawerContext).pop();
-                          widget.onToggleTheme();
-                        },
-                      ),
                     ],
                   ),
                 ),
@@ -235,6 +217,11 @@ class _AdminShellState extends State<AdminShell> {
       selectedIcon: Icon(Icons.bar_chart),
       label: Text('Báo cáo'),
     ),
+    NavigationRailDestination(
+      icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
+      label: Text('Cài đặt'),
+    ),
   ];
 
   static const List<Widget> _drawerDestinations = [
@@ -273,6 +260,12 @@ class _AdminShellState extends State<AdminShell> {
       icon: Icon(Icons.bar_chart_outlined),
       selectedIcon: Icon(Icons.bar_chart),
       label: Text('Báo cáo'),
+    ),
+    NavigationDrawerDestination(
+      key: Key('nav-drawer-settings'),
+      icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
+      label: Text('Cài đặt'),
     ),
   ];
 }

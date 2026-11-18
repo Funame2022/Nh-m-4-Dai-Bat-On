@@ -16,6 +16,8 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>client_flutter</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Vị trí được dùng để cập nhật hành trình xe buýt trong khi tài xế đang chạy chuyến.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

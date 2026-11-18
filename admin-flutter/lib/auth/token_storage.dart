@@ -9,6 +9,8 @@ abstract class TokenStorage {
   Future<void> clearRememberedEmail();
   Future<String?> readThemeMode();
   Future<void> saveThemeMode(String themeMode);
+  Future<String?> readNotificationsEnabled();
+  Future<void> saveNotificationsEnabled(bool enabled);
 }
 
 class SecureTokenStorage implements TokenStorage {
@@ -18,6 +20,8 @@ class SecureTokenStorage implements TokenStorage {
   static const String _key = 'xe_truong_admin_jwt';
   static const String _rememberedEmailKey = 'xe_truong_admin_remembered_email';
   static const String _themeModeKey = 'xe_truong_admin_theme_mode';
+  static const String _notificationsEnabledKey =
+      'xe_truong_admin_notifications_enabled';
 
   @override
   Future<String?> readToken() => _storage.read(key: _key);
@@ -47,4 +51,12 @@ class SecureTokenStorage implements TokenStorage {
   @override
   Future<void> saveThemeMode(String themeMode) =>
       _storage.write(key: _themeModeKey, value: themeMode);
+
+  @override
+  Future<String?> readNotificationsEnabled() =>
+      _storage.read(key: _notificationsEnabledKey);
+
+  @override
+  Future<void> saveNotificationsEnabled(bool enabled) =>
+      _storage.write(key: _notificationsEnabledKey, value: '$enabled');
 }

@@ -721,6 +721,344 @@ class _VanHanhScreenState extends State<VanHanhScreen>
 // ==========================================
 // 3. MÀN HÌNH PHỤ HUYNH (/api/phu-huynh)
 // ==========================================
+class NotificationCenterScreen extends StatefulWidget {
+  const NotificationCenterScreen({super.key, required this.token, this.client});
+
+  final String token;
+  final http.Client? client;
+
+  @override
+  State<NotificationCenterScreen> createState() =>
+      _NotificationCenterScreenState();
+}
+
+class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
+  static const int _pageSize = 50;
+  static const Map<String, ({String title, String subtitle})> _loai = {
+    'TRIP_STARTED': (
+      title: 'Chuyến xe bắt đầu',
+      subtitle: 'Khi tài xế bắt đầu chuyến đi.',
+    ),
+    'STUDENT_BOARDED': (
+      title: 'Học sinh lên xe',
+      subtitle: 'Khi học sinh được điểm danh lên xe.',
+    ),
+    'STUDENT_DROPPED_OFF': (
+      title: 'Học sinh xuống xe',
+      subtitle: 'Khi học sinh được điểm danh xuống xe.',
+    ),
+    'TRIP_COMPLETED': (
+      title: 'Chuyến xe hoàn tất',
+      subtitle: 'Khi chuyến đi kết thúc thành công.',
+    ),
+  };
+
+  late final http.Client _client = widget.client ?? http.Client();
+  bool get _tuSoHuuHttpClient => widget.client == null;
+  List<Map<String, dynamic>> _notifications = [];
+  Map<String, bool> _preferences = {
+    for (final event in _loai.keys) event: true,
+  };
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _saving = false;
+  String? _error;
+  int _unreadCount = 0;
+
+  Map<String, String> get _headers => {
+    'Authorization': 'Bearer ${widget.token}',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _taiDuLieu();
+  }
+
+  @override
+  void dispose() {
+    if (_tuSoHuuHttpClient) _client.close();
+    super.dispose();
+  }
+
+  Future<void> _taiDuLieu() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final responses = await Future.wait([
+        _client.get(
+          Uri.parse('$baseUrl/api/phu-huynh/thong-bao?limit=$_pageSize'),
+          headers: _headers,
+        ),
+        _client.get(
+          Uri.parse('$baseUrl/api/phu-huynh/thong-bao/cai-dat'),
+          headers: _headers,
+        ),
+      ]);
+      if (responses.any((response) => response.statusCode != 200)) {
+        throw const FormatException('Không tải được hộp thư.');
+      }
+      final inbox = jsonDecode(responses[0].body) as Map<String, dynamic>;
+      final settings = jsonDecode(responses[1].body) as Map<String, dynamic>;
+      final preferences = Map<String, bool>.from(_preferences);
+      final saved = settings['preferences'] as Map<String, dynamic>;
+      for (final event in _loai.keys) {
+        final value = saved[event];
+        if (value is bool) preferences[event] = value;
+      }
+      if (!mounted) return;
+      setState(() {
+        _notifications = (inbox['notifications'] as List)
+            .cast<Map<String, dynamic>>();
+        _unreadCount = (inbox['unreadCount'] as num).toInt();
+        _preferences = preferences;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể tải hộp thư thông báo.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _taiThem() async {
+    if (_loadingMore || _notifications.length < _pageSize) return;
+    final before = _notifications.last['id'];
+    if (before is! num) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await _client.get(
+        Uri.parse(
+          '$baseUrl/api/phu-huynh/thong-bao?limit=$_pageSize&before=${before.toInt()}',
+        ),
+        headers: _headers,
+      );
+      if (response.statusCode != 200) throw const FormatException();
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final more = (data['notifications'] as List).cast<Map<String, dynamic>>();
+      if (mounted) {
+        setState(() {
+          _notifications = [..._notifications, ...more];
+          _unreadCount = (data['unreadCount'] as num).toInt();
+        });
+      }
+    } catch (_) {
+      if (mounted) _thongBao('Không thể tải thêm thông báo.');
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _danhDauDaDoc(int index) async {
+    final item = _notifications[index];
+    if (item['da_doc_luc'] != null) return;
+    try {
+      final response = await _client.patch(
+        Uri.parse('$baseUrl/api/phu-huynh/thong-bao/${item['id']}/doc'),
+        headers: _headers,
+      );
+      if (response.statusCode != 200) throw const FormatException();
+      final updated = List<Map<String, dynamic>>.of(_notifications);
+      updated[index] = {
+        ...item,
+        'da_doc_luc':
+            (jsonDecode(response.body) as Map<String, dynamic>)['da_doc_luc'],
+      };
+      setState(() {
+        _notifications = updated;
+        _unreadCount = (_unreadCount - 1).clamp(0, 1 << 30).toInt();
+      });
+    } catch (_) {
+      _thongBao('Không thể cập nhật trạng thái đã đọc.');
+    }
+  }
+
+  Future<void> _danhDauTatCaDaDoc() async {
+    if (_unreadCount == 0) return;
+    try {
+      final response = await _client.patch(
+        Uri.parse('$baseUrl/api/phu-huynh/thong-bao/doc-tat-ca'),
+        headers: _headers,
+      );
+      if (response.statusCode != 200) throw const FormatException();
+      final now = DateTime.now().toIso8601String();
+      setState(() {
+        _notifications = _notifications
+            .map((item) => {...item, 'da_doc_luc': item['da_doc_luc'] ?? now})
+            .toList();
+        _unreadCount = 0;
+      });
+    } catch (_) {
+      _thongBao('Không thể đánh dấu thông báo đã đọc.');
+    }
+  }
+
+  Future<void> _luuTuyChon(String event, bool enabled) async {
+    setState(() => _saving = true);
+    try {
+      final response = await _client.put(
+        Uri.parse('$baseUrl/api/phu-huynh/thong-bao/cai-dat'),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'preferences': {event: enabled},
+        }),
+      );
+      if (response.statusCode != 200) throw const FormatException();
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final saved = data['preferences'] as Map<String, dynamic>;
+      setState(() {
+        _preferences = {
+          for (final key in _loai.keys)
+            key: saved[key] is bool ? saved[key] as bool : _preferences[key]!,
+        };
+      });
+    } catch (_) {
+      _thongBao('Không thể lưu cài đặt thông báo.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _thoiGian(String? value) {
+    final time = DateTime.tryParse(value ?? '')?.toLocal();
+    if (time == null) return 'Không rõ thời gian';
+    return '${time.day.toString().padLeft(2, '0')}/${time.month.toString().padLeft(2, '0')}/${time.year} '
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _thongBao(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Thông báo ($_unreadCount chưa đọc)'),
+          actions: [
+            IconButton(
+              key: const Key('notifications-mark-all-read'),
+              tooltip: 'Đánh dấu tất cả đã đọc',
+              onPressed: _unreadCount == 0 ? null : _danhDauTatCaDaDoc,
+              icon: const Icon(Icons.done_all),
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Hộp thư'),
+              Tab(text: 'Cài đặt'),
+            ],
+          ),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_error!),
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: _taiDuLieu,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                ),
+              )
+            : TabBarView(children: [_buildHopThu(), _buildCaiDat()]),
+      ),
+    );
+  }
+
+  Widget _buildHopThu() {
+    if (_notifications.isEmpty) {
+      return const Center(child: Text('Chưa có thông báo nào.'));
+    }
+    return RefreshIndicator(
+      onRefresh: _taiDuLieu,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount:
+            _notifications.length +
+            (_notifications.length >= _pageSize ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _notifications.length) {
+            return Center(
+              child: TextButton(
+                onPressed: _loadingMore ? null : _taiThem,
+                child: Text(
+                  _loadingMore ? 'Đang tải…' : 'Tải thông báo cũ hơn',
+                ),
+              ),
+            );
+          }
+          final item = _notifications[index];
+          final unread = item['da_doc_luc'] == null;
+          return Card(
+            key: Key('notification-item-${item['id']}'),
+            color: unread
+                ? Theme.of(context).colorScheme.secondaryContainer
+                : null,
+            child: ListTile(
+              leading: Icon(
+                unread
+                    ? Icons.mark_email_unread_outlined
+                    : Icons.drafts_outlined,
+              ),
+              title: Text(
+                item['tieu_de'] as String? ?? 'Thông báo',
+                style: TextStyle(
+                  fontWeight: unread ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              subtitle: Text(
+                '${item['noi_dung'] ?? ''}\n${_thoiGian(item['tao_luc'] as String?)}',
+              ),
+              isThreeLine: true,
+              trailing: unread ? const Text('Chưa đọc') : const Text('Đã đọc'),
+              onTap: unread ? () => _danhDauDaDoc(index) : null,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCaiDat() {
+    return ListView(
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            'Nhận thông báo trong hộp thư khi có các sự kiện sau:',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+        for (final entry in _loai.entries)
+          SwitchListTile(
+            key: Key('notification-preference-${entry.key}'),
+            title: Text(entry.value.title),
+            subtitle: Text(entry.value.subtitle),
+            value: _preferences[entry.key] ?? true,
+            onChanged: _saving
+                ? null
+                : (enabled) => _luuTuyChon(entry.key, enabled),
+          ),
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+      ],
+    );
+  }
+}
+
 abstract interface class ParentGpsConnection {
   Stream<dynamic> get messages;
   Future<void> close();
@@ -851,6 +1189,16 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _moHopThuThongBao() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            NotificationCenterScreen(token: widget.token, client: _client),
+      ),
+    );
   }
 
   Future<void> _dongKetNoiGps() async {
@@ -1021,6 +1369,12 @@ class _PhuHuynhScreenState extends State<PhuHuynhScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            key: const Key('parent-notification-inbox'),
+            tooltip: 'Hộp thư thông báo',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: _moHopThuThongBao,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _taiThongTinTheoDoi,

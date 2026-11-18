@@ -2,8 +2,9 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('node:http');
-const { truyVan } = require('./db');
+const { truyVan, pool } = require('./db');
 const { ganKenhGiamSat } = require('./giamSatSocket');
+const { apDungMigrations } = require('./migrations');
 
 const app = express();
 app.use(cors());
@@ -22,8 +23,15 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/quan-ly', require('./routes/quanLy'));
 app.use('/api/van-hanh', require('./routes/vanHanh'));
 app.use('/api/phu-huynh', require('./routes/phuHuynh'));
+app.use('/api/phu-huynh', require('./routes/thongBao'));
 
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 ganKenhGiamSat(server);
-server.listen(PORT, () => console.log('Server dang chay tai cong ' + PORT));
+apDungMigrations(pool)
+  .then(() => server.listen(PORT, () => console.log('Server dang chay tai cong ' + PORT)))
+  .catch(async (error) => {
+    console.error('Khong the cap nhat co so du lieu:', error.message);
+    await pool.end();
+    process.exitCode = 1;
+  });

@@ -266,6 +266,95 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     expect(connections.last.isClosed, isTrue);
   });
+
+  testWidgets('hộp thư đánh dấu đã đọc và lưu tùy chọn từng loại', (
+    tester,
+  ) async {
+    final preferences = <String, bool>{
+      'TRIP_STARTED': true,
+      'STUDENT_BOARDED': true,
+      'STUDENT_DROPPED_OFF': true,
+      'TRIP_COMPLETED': true,
+    };
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path.endsWith('/thong-bao')) {
+        return jsonResponse({
+          'notifications': [
+            {
+              'id': 12,
+              'loai_su_kien': 'STUDENT_BOARDED',
+              'tieu_de': 'Học sinh đã lên xe',
+              'noi_dung': 'An Nguyễn đã lên xe buýt tuyến 1.',
+              'tao_luc': '2026-11-18T07:00:00.000Z',
+              'da_doc_luc': null,
+            },
+            {
+              'id': 11,
+              'loai_su_kien': 'TRIP_STARTED',
+              'tieu_de': 'Chuyến xe đã bắt đầu',
+              'noi_dung': 'Xe buýt tuyến 1 đã bắt đầu chuyến.',
+              'tao_luc': '2026-11-18T06:55:00.000Z',
+              'da_doc_luc': '2026-11-18T06:56:00.000Z',
+            },
+          ],
+          'unreadCount': 1,
+        });
+      }
+      if (request.method == 'GET' &&
+          request.url.path.endsWith('/thong-bao/cai-dat')) {
+        return jsonResponse({'preferences': preferences});
+      }
+      if (request.method == 'PATCH' && request.url.path.endsWith('/12/doc')) {
+        return jsonResponse({
+          'id': 12,
+          'da_doc_luc': '2026-11-18T07:10:00.000Z',
+        });
+      }
+      if (request.method == 'PUT' &&
+          request.url.path.endsWith('/thong-bao/cai-dat')) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        preferences.addAll(
+          (body['preferences'] as Map<String, dynamic>).cast<String, bool>(),
+        );
+        return jsonResponse({'preferences': preferences});
+      }
+      fail('Yêu cầu hộp thư không mong đợi: ${request.method} ${request.url}');
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationCenterScreen(token: 'parent-token', client: client),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thông báo (1 chưa đọc)'), findsOneWidget);
+    expect(find.text('Chưa đọc'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('notification-item-12')));
+    await tester.pumpAndSettle();
+    expect(find.text('Thông báo (0 chưa đọc)'), findsOneWidget);
+    expect(find.text('Đã đọc'), findsNWidgets(2));
+
+    await tester.tap(find.text('Cài đặt'));
+    await tester.pumpAndSettle();
+    final boardedSwitch = tester.widget<SwitchListTile>(
+      find.byKey(const Key('notification-preference-STUDENT_BOARDED')),
+    );
+    expect(boardedSwitch.value, isTrue);
+    await tester.tap(
+      find.byKey(const Key('notification-preference-STUDENT_BOARDED')),
+    );
+    await tester.pumpAndSettle();
+    expect(preferences['STUDENT_BOARDED'], isFalse);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('notification-preference-STUDENT_BOARDED')),
+          )
+          .value,
+      isFalse,
+    );
+  });
 }
 
 Map<String, Object?> _journey(int id) => {

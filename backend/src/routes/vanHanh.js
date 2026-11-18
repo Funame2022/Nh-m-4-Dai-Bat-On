@@ -1,7 +1,8 @@
 ﻿const express = require('express');
-const { truyVan } = require('../db');
+const { truyVan, trongGiaoDich } = require('../db');
 const { xacThuc, choPhep } = require('../middleware/auth');
 const { phatCapNhatGps } = require('../giamSatSocket');
+const { taoThongBaoChoChuyen } = require('../thongBao');
 
 const router = express.Router();
 router.use(xacThuc, choPhep('TAI_XE', 'BAO_MAU', 'QUAN_LY'));
@@ -66,11 +67,25 @@ router.post('/chuyen/:id/bat-dau', async (req, res) => {
   if (!(await kiemTraQuyenChuyen(req.params.id, req.nguoiDung))) {
     return res.status(403).json({ loi: 'Không có quyền bắt đầu chuyến này' });
   }
-  const kq = await truyVan(
-    "UPDATE chuyen_di SET trang_thai = 'DANG_CHAY', bat_dau_luc = NOW() WHERE id = $1 RETURNING *",
-    [req.params.id]
-  );
-  res.json(kq.rows[0]);
+  try {
+    const chuyen = await trongGiaoDich(async (client) => {
+      const kq = await client.query(
+        "UPDATE chuyen_di SET trang_thai = 'DANG_CHAY', bat_dau_luc = NOW() WHERE id = $1 RETURNING *",
+        [req.params.id],
+      );
+      if (kq.rows[0]) {
+        await taoThongBaoChoChuyen(client, {
+          chuyenId: Number(req.params.id),
+          loai: 'TRIP_STARTED',
+        });
+      }
+      return kq.rows[0];
+    });
+    if (!chuyen) return res.status(404).json({ loi: 'Không tìm thấy chuyến đi' });
+    res.json(chuyen);
+  } catch (e) {
+    res.status(500).json({ loi: 'Không thể bắt đầu chuyến đi' });
+  }
 });
 
 router.post('/chuyen/:id/ket-thuc', async (req, res) => {
@@ -105,11 +120,25 @@ router.post('/chuyen/:id/ket-thuc', async (req, res) => {
     });
   }
 
-  const kq = await truyVan(
-    "UPDATE chuyen_di SET trang_thai = 'HOAN_THANH', ket_thuc_luc = NOW() WHERE id = $1 RETURNING *",
-    [req.params.id]
-  );
-  res.json(kq.rows[0]);
+  try {
+    const chuyen = await trongGiaoDich(async (client) => {
+      const kq = await client.query(
+        "UPDATE chuyen_di SET trang_thai = 'HOAN_THANH', ket_thuc_luc = NOW() WHERE id = $1 RETURNING *",
+        [req.params.id],
+      );
+      if (kq.rows[0]) {
+        await taoThongBaoChoChuyen(client, {
+          chuyenId: Number(req.params.id),
+          loai: 'TRIP_COMPLETED',
+        });
+      }
+      return kq.rows[0];
+    });
+    if (!chuyen) return res.status(404).json({ loi: 'Không tìm thấy chuyến đi' });
+    res.json(chuyen);
+  } catch (e) {
+    res.status(500).json({ loi: 'Không thể hoàn tất chuyến đi' });
+  }
 });
 
 router.post('/chuyen/:id/diem-danh', async (req, res) => {
@@ -117,15 +146,50 @@ router.post('/chuyen/:id/diem-danh', async (req, res) => {
     if (!(await kiemTraQuyenChuyen(req.params.id, req.nguoiDung))) {
       return res.status(403).json({ loi: 'Không có quyền điểm danh chuyến này' });
     }
-    const { hocSinhId, diemDungId, suKien } = req.body;
-    const kq = await truyVan(`
-      INSERT INTO diem_danh (chuyen_di_id, hoc_sinh_id, diem_dung_id, su_kien)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (chuyen_di_id, hoc_sinh_id, su_kien) DO UPDATE SET thoi_diem = NOW()
-      RETURNING *
-    `, [req.params.id, hocSinhId, diemDungId, suKien]);
-    res.status(201).json(kq.rows[0]);
-  } catch (e) { res.status(400).json({ loi: e.message }); }
+    const { hocSinhId, diemDungId, suKien } = req.body || {};
+    if (
+      !Number.isSafeInteger(hocSinhId) || hocSinhId < 1 ||
+      !['LEN_XE', 'XUONG_XE'].includes(suKien) ||
+      (diemDungId != null && (!Number.isSafeInteger(diemDungId) || diemDungId < 1))
+    ) {
+      return res.status(400).json({ loi: 'Thông tin điểm danh không hợp lệ' });
+    }
+    const kq = await trongGiaoDich(async (client) => {
+      const phanCong = await client.query(`
+        SELECT 1
+        FROM chuyen_di cd
+        JOIN dang_ky_tuyen dk ON dk.tuyen_id = cd.tuyen_id AND dk.chieu = cd.chieu
+        WHERE cd.id = $1 AND dk.hoc_sinh_id = $2
+      `, [req.params.id, hocSinhId]);
+      if (phanCong.rows.length === 0) return null;
+
+      let diemDanh = await client.query(`
+        INSERT INTO diem_danh (chuyen_di_id, hoc_sinh_id, diem_dung_id, su_kien)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (chuyen_di_id, hoc_sinh_id, su_kien) DO NOTHING
+        RETURNING *
+      `, [req.params.id, hocSinhId, diemDungId ?? null, suKien]);
+      const laSuKienMoi = diemDanh.rows.length > 0;
+      if (!laSuKienMoi) {
+        diemDanh = await client.query(`
+          UPDATE diem_danh SET thoi_diem = NOW()
+          WHERE chuyen_di_id = $1 AND hoc_sinh_id = $2 AND su_kien = $3
+          RETURNING *
+        `, [req.params.id, hocSinhId, suKien]);
+      } else {
+        await taoThongBaoChoChuyen(client, {
+          chuyenId: Number(req.params.id),
+          hocSinhId,
+          loai: suKien === 'LEN_XE' ? 'STUDENT_BOARDED' : 'STUDENT_DROPPED_OFF',
+        });
+      }
+      return diemDanh.rows[0];
+    });
+    if (!kq) return res.status(400).json({ loi: 'Học sinh không thuộc chuyến này' });
+    res.status(201).json(kq);
+  } catch (_) {
+    res.status(500).json({ loi: 'Không thể ghi nhận điểm danh' });
+  }
 });
 
 router.post('/chuyen/:id/vi-tri', async (req, res) => {

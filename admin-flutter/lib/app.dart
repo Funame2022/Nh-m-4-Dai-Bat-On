@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'auth/auth_service.dart';
 import 'fleet/quan_ly_service.dart';
 import 'models/nguoi_dung.dart';
 import 'operations/quan_ly_operations_service.dart';
+import 'operations/van_hanh_service.dart';
 import 'screens/admin_shell.dart';
 import 'screens/login_screen.dart';
 
@@ -13,11 +16,13 @@ class AdminApp extends StatefulWidget {
     required this.authService,
     required this.quanLyService,
     required this.operationsService,
+    this.vanHanhService,
   });
 
   final AuthService authService;
   final QuanLyService quanLyService;
   final QuanLyOperationsService operationsService;
+  final VanHanhService? vanHanhService;
 
   @override
   State<AdminApp> createState() => _AdminAppState();
@@ -126,6 +131,7 @@ class _AdminAppState extends State<AdminApp> {
         authService: widget.authService,
         quanLyService: widget.quanLyService,
         operationsService: widget.operationsService,
+        vanHanhService: widget.vanHanhService,
         isDark: _themeMode == ThemeMode.dark,
         onToggleTheme: _doiTheme,
       ),
@@ -139,6 +145,7 @@ class AuthGate extends StatefulWidget {
     required this.authService,
     required this.quanLyService,
     required this.operationsService,
+    this.vanHanhService,
     required this.isDark,
     required this.onToggleTheme,
   });
@@ -146,6 +153,7 @@ class AuthGate extends StatefulWidget {
   final AuthService authService;
   final QuanLyService quanLyService;
   final QuanLyOperationsService operationsService;
+  final VanHanhService? vanHanhService;
   final bool isDark;
   final Future<void> Function() onToggleTheme;
 
@@ -157,11 +165,30 @@ class _AuthGateState extends State<AuthGate> {
   bool _dangKhoiPhuc = true;
   NguoiDung? _nguoiDung;
   AuthException? _loi;
+  StreamSubscription<void>? _sessionSub;
 
   @override
   void initState() {
     super.initState();
+    _sessionSub = widget.authService.onSessionExpired.listen((_) {
+      if (!mounted) return;
+      setState(() => _nguoiDung = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          key: Key('session-expired-snack'),
+          content: Text('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
     _khoiPhuc();
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _khoiPhuc() async {

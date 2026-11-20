@@ -30,6 +30,20 @@ class AuthService {
   final http.Client _client;
   final TokenStorage _storage;
   final String baseUrl;
+  final _sessionExpiredController = StreamController<void>.broadcast();
+
+  Stream<void> get onSessionExpired => _sessionExpiredController.stream;
+
+  void notifySessionExpired() {
+    _storage.clearToken();
+    if (!_sessionExpiredController.isClosed) {
+      _sessionExpiredController.add(null);
+    }
+  }
+
+  void dispose() {
+    _sessionExpiredController.close();
+  }
 
   static const Duration _timeout = Duration(seconds: 20);
 

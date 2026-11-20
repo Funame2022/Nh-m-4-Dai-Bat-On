@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../models/nguoi_dung.dart';
 import '../../models/van_hanh.dart';
 import '../../operations/van_hanh_service.dart';
+import '../../operations/gps_tracker_service.dart';
 import '../../widgets/trang_thai_danh_sach.dart';
 import 'widgets/diem_dung_timeline_widget.dart';
 import 'widgets/hoc_sinh_item_widget.dart';
+import 'widgets/gps_live_status_widget.dart';
 
 class ChiTietChuyenPage extends StatefulWidget {
   const ChiTietChuyenPage({
@@ -14,12 +16,14 @@ class ChiTietChuyenPage extends StatefulWidget {
     this.initialChuyen,
     required this.vanHanhService,
     required this.nguoiDung,
+    this.gpsTracker,
   });
 
   final int chuyenId;
   final ChuyenDi? initialChuyen;
   final VanHanhService vanHanhService;
   final NguoiDung nguoiDung;
+  final GpsTrackerService? gpsTracker;
 
   @override
   State<ChiTietChuyenPage> createState() => _ChiTietChuyenPageState();
@@ -33,17 +37,31 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
   late TabController _tabController;
   final Set<int> _dangXuLyHocSinh = {};
   bool _dangXuLyChuyen = false;
+  late final GpsTrackerService _gpsTracker;
+  bool _soHuuGpsTracker = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    if (widget.gpsTracker != null) {
+      _gpsTracker = widget.gpsTracker!;
+      _soHuuGpsTracker = false;
+    } else {
+      _gpsTracker = GpsTrackerService(vanHanhService: widget.vanHanhService);
+      _soHuuGpsTracker = true;
+    }
     _taiDuLieu();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    if (_soHuuGpsTracker) {
+      _gpsTracker.dispose();
+    } else {
+      _gpsTracker.dungTracking();
+    }
     super.dispose();
   }
 
@@ -60,6 +78,13 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         _chiTiet = res;
         _dangTai = false;
       });
+
+      if (res.chuyenDi.laDangChay && !_gpsTracker.dangTracking) {
+        _gpsTracker.batDauTracking(
+          chuyenId: widget.chuyenId,
+          loTrinh: res.diemDung,
+        );
+      }
     } on VanHanhApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -288,6 +313,10 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         _chiTiet = _chiTiet?.copyWith(chuyenDi: updated);
         _dangXuLyChuyen = false;
       });
+      _gpsTracker.batDauTracking(
+        chuyenId: widget.chuyenId,
+        loTrinh: _chiTiet?.diemDung ?? [],
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Chuyến đi đã bắt đầu! Chúc bạn có lộ trình an toàn.'),
@@ -440,6 +469,7 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         _chiTiet = _chiTiet?.copyWith(chuyenDi: updated);
         _dangXuLyChuyen = false;
       });
+      _gpsTracker.dungTracking();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Chuyến đi đã kết thúc thành công!'),
@@ -730,6 +760,29 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
 
             const SizedBox(height: 16),
             _buildTripActionButtons(chuyen, theme),
+            if (chuyen.laDangChay) ...[
+              GpsLiveStatusWidget(
+                gpsTracker: _gpsTracker,
+                onGuiNgay: () async {
+                  final vt = _gpsTracker.viTriHienTai;
+                  if (vt != null) {
+                    await _gpsTracker.guiToaDoThuCong(
+                      chuyenId: widget.chuyenId,
+                      viDo: vt.viDo,
+                      kinhDo: vt.kinhDo,
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Đã cập nhật tọa độ GPS lên hệ thống.'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
           ],
         ),
       ),

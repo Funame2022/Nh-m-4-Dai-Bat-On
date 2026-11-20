@@ -113,6 +113,10 @@ void main() {
     expect(find.text('Báo nghỉ học'), findsOneWidget);
     expect(find.text('Đang trên xe'), findsOneWidget);
     expect(find.text('1'), findsWidgets);
+
+    // Kiểm tra card GPS Live Tracking hiển thị khi chuyến đang chạy
+    expect(find.byKey(const Key('card-gps-live-status')), findsOneWidget);
+    expect(find.text('GPS LIVE TRACKING'), findsOneWidget);
   });
 
   testWidgets('Hiển thị danh sách trạm dừng ở Tab Điểm dừng', (tester) async {

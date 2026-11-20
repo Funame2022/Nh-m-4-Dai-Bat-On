@@ -812,6 +812,7 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
     };
 
     return ListView.builder(
+      key: const PageStorageKey<String>('hoc-sinh-tab-list'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: dsHocSinh.length,
       itemBuilder: (context, index) {
@@ -859,10 +860,11 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
                 )
               : _chiTiet == null
                   ? const Center(child: Text('Không tìm thấy thông tin ca xe.'))
-                  : Column(
-                      children: [
-                        _buildOverviewHeader(_chiTiet!, theme),
-                        TabBar(
+                  : OrientationBuilder(
+                      builder: (context, orientation) {
+                        final laNgang = orientation == Orientation.landscape;
+
+                        final tabBar = TabBar(
                           controller: _tabController,
                           tabs: [
                             Tab(
@@ -874,17 +876,52 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
                               text: 'Học sinh (${_chiTiet!.hocSinh.length})',
                             ),
                           ],
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            controller: _tabController,
+                        );
+
+                        final tabViews = TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildDiemDungTab(_chiTiet!, theme),
+                            _buildHocSinhTab(_chiTiet!, theme),
+                          ],
+                        );
+
+                        if (laNgang) {
+                          // Bố cục tối ưu xoay ngang (Landscape Mode)
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _buildDiemDungTab(_chiTiet!, theme),
-                              _buildHocSinhTab(_chiTiet!, theme),
+                              // Cột trái: Thông tin tổng quan ca xe & Nút thao tác
+                              SizedBox(
+                                width: 360,
+                                child: SingleChildScrollView(
+                                  key: const PageStorageKey<String>('landscape-header-scroll'),
+                                  child: _buildOverviewHeader(_chiTiet!, theme),
+                                ),
+                              ),
+                              const VerticalDivider(width: 1),
+                              // Cột phải: TabBar và TabBarView
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    tabBar,
+                                    Expanded(child: tabViews),
+                                  ],
+                                ),
+                              ),
                             ],
-                          ),
-                        ),
-                      ],
+                          );
+                        }
+
+                        // Bố cục xoay dọc mặc định (Portrait Mode)
+                        return Column(
+                          children: [
+                            _buildOverviewHeader(_chiTiet!, theme),
+                            tabBar,
+                            Expanded(child: tabViews),
+                          ],
+                        );
+                      },
                     ),
     );
   }

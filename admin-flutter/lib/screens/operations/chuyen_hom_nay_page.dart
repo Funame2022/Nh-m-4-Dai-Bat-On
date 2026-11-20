@@ -415,6 +415,7 @@ class _ChuyenHomNayPageState extends State<ChuyenHomNayPage> {
     return RefreshIndicator(
       onRefresh: _taiDuLieu,
       child: ListView.builder(
+        key: const PageStorageKey<String>('ds-chuyen-hom-nay-list'),
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: _dsChuyen.length + 1,
         itemBuilder: (context, index) {

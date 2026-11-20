@@ -20,8 +20,12 @@ class DiemDungTimelineWidget extends StatefulWidget {
   State<DiemDungTimelineWidget> createState() => _DiemDungTimelineWidgetState();
 }
 
-class _DiemDungTimelineWidgetState extends State<DiemDungTimelineWidget> {
+class _DiemDungTimelineWidgetState extends State<DiemDungTimelineWidget>
+    with AutomaticKeepAliveClientMixin {
   final Set<int> _diemMoRong = {};
+
+  @override
+  bool get wantKeepAlive => true;
 
   void _toggleMoRong(int diemId) {
     setState(() {
@@ -35,6 +39,7 @@ class _DiemDungTimelineWidgetState extends State<DiemDungTimelineWidget> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final dsDiemDung = widget.chiTiet.diemDung;
     final chuyen = widget.chiTiet.chuyenDi;
     final theme = Theme.of(context);
@@ -66,6 +71,7 @@ class _DiemDungTimelineWidgetState extends State<DiemDungTimelineWidget> {
     }
 
     return ListView.builder(
+      key: const PageStorageKey<String>('diem-dung-timeline-list'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: dsDiemDung.length,
       itemBuilder: (context, index) {

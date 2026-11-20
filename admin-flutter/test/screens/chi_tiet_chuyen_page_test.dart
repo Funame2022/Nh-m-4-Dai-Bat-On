@@ -240,4 +240,78 @@ void main() {
     // Sau khi lên xe, trạng thái chuyển sang Đang trên xe và hiển thị nút XUỐNG XE
     expect(find.byKey(const Key('btn-xuong-xe-301')), findsOneWidget);
   });
+
+  testWidgets('Bấm nút XUỐNG XE thực hiện điểm danh học sinh xuống xe thành công', (tester) async {
+    final mockDataWithBoardedStudent = {
+      'chuyenDi': {
+        'id': 50,
+        'tuyen_id': 3,
+        'ngay': '2026-11-20',
+        'chieu': 'DON_SANG',
+        'trang_thai': 'DANG_CHAY',
+        'ten_tuyen': 'Tuyến Q1 - Bình Thạnh',
+        'bien_so': '51B-888.99',
+      },
+      'diemDung': [
+        {
+          'id': 1,
+          'tuyen_id': 3,
+          'thu_tu': 1,
+          'ten': 'Trạm Ngã tư Hàng Xanh',
+          'vi_do': 10.80,
+          'kinh_do': 106.71,
+          'gio_du_kien': '06:45',
+        }
+      ],
+      'hocSinh': [
+        {
+          'id': 401,
+          'ma_hs': 'HS401',
+          'ho_ten': 'Phạm Gia Hưng',
+          'ten_lop': '5A',
+          'diem_dung_id': 1,
+          'da_len_xe': true,
+          'da_xuong_xe': false,
+        }
+      ],
+    };
+
+    bool diemDanhXuongCalled = false;
+    final client = MockClient((request) async {
+      if (request.url.path.contains('/diem-danh')) {
+        diemDanhXuongCalled = true;
+        final body = jsonDecode(request.body);
+        expect(body['hocSinhId'], 401);
+        expect(body['suKien'], 'XUONG_XE');
+        return jsonResponse({
+          'id': 2,
+          'chuyen_di_id': 50,
+          'hoc_sinh_id': 401,
+          'su_kien': 'XUONG_XE',
+          'thoi_diem': '2026-11-20T07:15:00Z',
+        });
+      }
+      return jsonResponse(mockDataWithBoardedStudent);
+    });
+
+    await tester.pumpWidget(createWidget(client: client));
+    await tester.pumpAndSettle();
+
+    // Chuyển sang Tab Học sinh
+    await tester.tap(find.textContaining('Học sinh'));
+    await tester.pumpAndSettle();
+
+    // Kiểm tra có nút XUỐNG XE cho học sinh đang trên xe
+    expect(find.byKey(const Key('btn-xuong-xe-401')), findsOneWidget);
+
+    // Bấm nút XUỐNG XE
+    await tester.tap(find.byKey(const Key('btn-xuong-xe-401')));
+    await tester.pumpAndSettle();
+
+    expect(diemDanhXuongCalled, isTrue);
+    expect(find.textContaining('Đã điểm danh Phạm Gia Hưng XUỐNG XE'), findsOneWidget);
+    // Sau khi xuống xe, hiển thị nhãn Hoàn tất và không còn nút điểm danh
+    expect(find.text('Hoàn tất'), findsOneWidget);
+    expect(find.byKey(const Key('btn-xuong-xe-401')), findsNothing);
+  });
 }

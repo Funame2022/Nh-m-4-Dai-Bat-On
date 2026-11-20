@@ -5,6 +5,7 @@ import '../../models/van_hanh.dart';
 import '../../operations/van_hanh_service.dart';
 import '../../widgets/trang_thai_danh_sach.dart';
 import 'widgets/diem_dung_timeline_widget.dart';
+import 'widgets/hoc_sinh_item_widget.dart';
 
 class ChiTietChuyenPage extends StatefulWidget {
   const ChiTietChuyenPage({
@@ -256,7 +257,6 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
 
   Widget _buildHocSinhTab(ChiTietChuyenDi chiTiet, ThemeData theme) {
     final dsHocSinh = chiTiet.hocSinh;
-    final colors = theme.colorScheme;
 
     if (dsHocSinh.isEmpty) {
       return const Center(
@@ -264,70 +264,26 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
       );
     }
 
+    final Map<int, String> diemDungMap = {
+      for (final d in chiTiet.diemDung) d.id: d.ten,
+    };
+
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: dsHocSinh.length,
       itemBuilder: (context, index) {
         final hs = dsHocSinh[index];
-        final trangThai = hs.trangThai;
+        final tenTram = hs.diemDungId != null ? diemDungMap[hs.diemDungId] : null;
 
-        Color badgeColor;
-        switch (trangThai) {
-          case TrangThaiHocSinh.baoNghi:
-            badgeColor = Colors.orange.shade700;
-            break;
-          case TrangThaiHocSinh.dangTrenXe:
-            badgeColor = Colors.blue.shade700;
-            break;
-          case TrangThaiHocSinh.daXuong:
-            badgeColor = Colors.green.shade700;
-            break;
-          case TrangThaiHocSinh.chuaLen:
-            badgeColor = Colors.grey.shade600;
-            break;
-        }
-
-        return Card(
-          key: Key('hoc-sinh-card-${hs.id}'),
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 8),
-          color: colors.surfaceContainerLowest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.4),
-            ),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            leading: CircleAvatar(
-              backgroundColor: colors.primary.withValues(alpha: 0.1),
-              child: Icon(Icons.person_rounded, color: colors.primary),
-            ),
-            title: Text(
-              hs.hoTen,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              'Lớp: ${hs.tenLop} • Mã: ${hs.maHs}' +
-                  (hs.coDonBaoNghi ? '\nLý do nghỉ: ${hs.lyDoNghi}' : ''),
-            ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                trangThai.moTa,
-                style: TextStyle(
-                  color: badgeColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
+        return HocSinhItemWidget(
+          hocSinh: hs,
+          tenDiemDung: tenTram,
+          onDiemDanhLenXe: () {
+            // Sẽ kết nối API ở Phần 11
+          },
+          onDiemDanhXuongXe: () {
+            // Sẽ kết nối API ở Phần 12
+          },
         );
       },
     );

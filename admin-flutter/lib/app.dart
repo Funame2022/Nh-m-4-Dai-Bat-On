@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'auth/auth_service.dart';
+import 'auth/token_storage.dart';
 import 'fleet/quan_ly_service.dart';
 import 'models/nguoi_dung.dart';
 import 'operations/quan_ly_operations_service.dart';
 import 'operations/van_hanh_service.dart';
 import 'screens/admin_shell.dart';
 import 'screens/login_screen.dart';
+import 'screens/van_hanh_shell.dart';
 
 class AdminApp extends StatefulWidget {
   const AdminApp({
@@ -282,17 +285,40 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (_nguoiDung != null) {
-      return AdminShell(
-        nguoiDung: _nguoiDung!,
-        authService: widget.authService,
-        onLogout: _dangXuat,
-        onSwitchAccount: _doiTaiKhoan,
-        onUserUpdated: (user) => setState(() => _nguoiDung = user),
-        quanLyService: widget.quanLyService,
-        operationsService: widget.operationsService,
-        isDark: widget.isDark,
-        onToggleTheme: widget.onToggleTheme,
-      );
+      if (_nguoiDung!.laQuanLy) {
+        return AdminShell(
+          key: const Key('admin-shell'),
+          nguoiDung: _nguoiDung!,
+          authService: widget.authService,
+          onLogout: _dangXuat,
+          onSwitchAccount: _doiTaiKhoan,
+          onUserUpdated: (user) => setState(() => _nguoiDung = user),
+          quanLyService: widget.quanLyService,
+          operationsService: widget.operationsService,
+          isDark: widget.isDark,
+          onToggleTheme: widget.onToggleTheme,
+        );
+      } else if (_nguoiDung!.laNhanVienVanHanh) {
+        final effectiveVanHanh = widget.vanHanhService ??
+            VanHanhService(
+              client: http.Client(),
+              storage: const SecureTokenStorage(),
+              baseUrl: widget.authService.baseUrl,
+              onTokenExpired: () async => widget.authService.notifySessionExpired(),
+            );
+
+        return VanHanhShell(
+          key: const Key('van-hanh-shell'),
+          nguoiDung: _nguoiDung!,
+          authService: widget.authService,
+          vanHanhService: effectiveVanHanh,
+          onLogout: _dangXuat,
+          onSwitchAccount: _doiTaiKhoan,
+          onUserUpdated: (user) => setState(() => _nguoiDung = user),
+          isDark: widget.isDark,
+          onToggleTheme: widget.onToggleTheme,
+        );
+      }
     }
 
     return LoginScreen(

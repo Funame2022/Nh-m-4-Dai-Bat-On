@@ -4,6 +4,7 @@ import '../auth/auth_service.dart';
 import '../models/nguoi_dung.dart';
 import '../models/van_hanh.dart';
 import '../operations/van_hanh_service.dart';
+import 'operations/chi_tiet_chuyen_page.dart';
 import 'operations/chuyen_hom_nay_page.dart';
 import 'settings_screen.dart';
 
@@ -76,10 +77,14 @@ class _VanHanhShellState extends State<VanHanhShell> {
   }
 
   void _moChiTietChuyen(ChuyenDi chuyen) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đã chọn ca xe: ${chuyen.tenTuyen} (${chuyen.bienSo})'),
-        duration: const Duration(seconds: 2),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChiTietChuyenPage(
+          chuyenId: chuyen.id,
+          initialChuyen: chuyen,
+          vanHanhService: widget.vanHanhService,
+          nguoiDung: widget.nguoiDung,
+        ),
       ),
     );
   }

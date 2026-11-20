@@ -167,4 +167,77 @@ void main() {
 
     expect(find.byKey(const Key('card-chuyen-overview')), findsOneWidget);
   });
+
+  testWidgets('Bấm nút LÊN XE thực hiện điểm danh học sinh thành công', (tester) async {
+    final mockDataWithUnboardedStudent = {
+      'chuyenDi': {
+        'id': 50,
+        'tuyen_id': 3,
+        'ngay': '2026-11-20',
+        'chieu': 'DON_SANG',
+        'trang_thai': 'DANG_CHAY',
+        'ten_tuyen': 'Tuyến Q1 - Bình Thạnh',
+        'bien_so': '51B-888.99',
+      },
+      'diemDung': [
+        {
+          'id': 1,
+          'tuyen_id': 3,
+          'thu_tu': 1,
+          'ten': 'Trạm Ngã tư Hàng Xanh',
+          'vi_do': 10.80,
+          'kinh_do': 106.71,
+          'gio_du_kien': '06:45',
+        }
+      ],
+      'hocSinh': [
+        {
+          'id': 301,
+          'ma_hs': 'HS301',
+          'ho_ten': 'Trần Văn An',
+          'ten_lop': '3B',
+          'diem_dung_id': 1,
+          'da_len_xe': false,
+          'da_xuong_xe': false,
+        }
+      ],
+    };
+
+    bool diemDanhCalled = false;
+    final client = MockClient((request) async {
+      if (request.url.path.contains('/diem-danh')) {
+        diemDanhCalled = true;
+        final body = jsonDecode(request.body);
+        expect(body['hocSinhId'], 301);
+        expect(body['suKien'], 'LEN_XE');
+        return jsonResponse({
+          'id': 1,
+          'chuyen_di_id': 50,
+          'hoc_sinh_id': 301,
+          'su_kien': 'LEN_XE',
+          'thoi_diem': '2026-11-20T06:45:00Z',
+        });
+      }
+      return jsonResponse(mockDataWithUnboardedStudent);
+    });
+
+    await tester.pumpWidget(createWidget(client: client));
+    await tester.pumpAndSettle();
+
+    // Chuyển sang Tab Học sinh
+    await tester.tap(find.textContaining('Học sinh'));
+    await tester.pumpAndSettle();
+
+    // Kiểm tra có nút LÊN XE
+    expect(find.byKey(const Key('btn-len-xe-301')), findsOneWidget);
+
+    // Bấm nút LÊN XE
+    await tester.tap(find.byKey(const Key('btn-len-xe-301')));
+    await tester.pumpAndSettle();
+
+    expect(diemDanhCalled, isTrue);
+    expect(find.textContaining('Đã điểm danh Trần Văn An LÊN XE thành công!'), findsOneWidget);
+    // Sau khi lên xe, trạng thái chuyển sang Đang trên xe và hiển thị nút XUỐNG XE
+    expect(find.byKey(const Key('btn-xuong-xe-301')), findsOneWidget);
+  });
 }

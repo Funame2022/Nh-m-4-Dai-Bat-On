@@ -31,6 +31,7 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
   String? _loi;
   ChiTietChuyenDi? _chiTiet;
   late TabController _tabController;
+  final Set<int> _dangXuLyHocSinh = {};
 
   @override
   void initState() {
@@ -70,6 +71,85 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         _loi = 'Không thể tải chi tiết ca xe ($e)';
         _dangTai = false;
       });
+    }
+  }
+
+  /// Ghi nhận điểm danh LÊN XE cho học sinh
+  Future<void> _diemDanhLenXe(HocSinhDiemDanh hs) async {
+    if (_dangXuLyHocSinh.contains(hs.id)) return;
+
+    if (hs.coDonBaoNghi) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${hs.hoTen} đã có đơn xin nghỉ phép.'),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+      return;
+    }
+
+    if (_chiTiet?.chuyenDi.trangThai == TrangThaiChuyen.daKetThuc) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chuyến đi đã kết thúc, không thể điểm danh thêm.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _dangXuLyHocSinh.add(hs.id);
+    });
+
+    try {
+      await widget.vanHanhService.diemDanh(
+        chuyenId: widget.chuyenId,
+        hocSinhId: hs.id,
+        diemDungId: hs.diemDungId,
+        suKien: 'LEN_XE',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _chiTiet = _chiTiet?.capNhatDiemDanh(
+          hocSinhId: hs.id,
+          suKien: 'LEN_XE',
+        );
+        _dangXuLyHocSinh.remove(hs.id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã điểm danh ${hs.hoTen} LÊN XE thành công!'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } on VanHanhApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dangXuLyHocSinh.remove(hs.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi điểm danh: ${e.message}'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dangXuLyHocSinh.remove(hs.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể kết nối máy chủ: $e'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -276,11 +356,11 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         final tenTram = hs.diemDungId != null ? diemDungMap[hs.diemDungId] : null;
 
         return HocSinhItemWidget(
+          key: ValueKey('hoc-sinh-${hs.id}'),
           hocSinh: hs,
           tenDiemDung: tenTram,
-          onDiemDanhLenXe: () {
-            // Sẽ kết nối API ở Phần 11
-          },
+          dangXuLy: _dangXuLyHocSinh.contains(hs.id),
+          onDiemDanhLenXe: () => _diemDanhLenXe(hs),
           onDiemDanhXuongXe: () {
             // Sẽ kết nối API ở Phần 12
           },

@@ -3,7 +3,7 @@ class ApiConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: '',
+    defaultValue: 'https://nh-m-4-dai-bat-on.onrender.com',
   );
 
   static const String thongDiepChuaCauHinh =

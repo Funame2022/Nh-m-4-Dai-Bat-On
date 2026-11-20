@@ -114,9 +114,9 @@ class AuthService {
       }
 
       final nguoiDung = NguoiDung.fromJson(nguoiDungJson);
-      if (!nguoiDung.laQuanLy) {
+      if (!nguoiDung.coQuyenAdminApp) {
         throw const AuthException(
-          'Tài khoản không có quyền quản lý.',
+          'Tài khoản không có quyền truy cập ứng dụng (chỉ dành cho Quản lý, Tài xế hoặc Bảo mẫu).',
           statusCode: 403,
         );
       }
@@ -176,7 +176,7 @@ class AuthService {
       }
 
       final nguoiDung = NguoiDung.fromJson(json);
-      if (!nguoiDung.laQuanLy) {
+      if (!nguoiDung.coQuyenAdminApp) {
         await _storage.clearToken();
         return null;
       }

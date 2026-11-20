@@ -60,6 +60,14 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _dienNhanh(String email) {
+    setState(() {
+      _emailController.text = email;
+      _matKhauController.text = '123456';
+      _loi = null;
+    });
+  }
+
   Future<void> _dangNhap() async {
     if (_dangDangNhap) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -344,6 +352,39 @@ class _LoginScreenState extends State<LoginScreen> {
                                           )
                                         : const Text('Đăng nhập'),
                                   ),
+                                ),
+                                SizedBox(height: compact ? 12 : 16),
+                                Text(
+                                  'Điền nhanh tài khoản kiểm thử:',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    ActionChip(
+                                      key: const Key('quick-login-admin'),
+                                      label: const Text('Quản lý'),
+                                      avatar: const Icon(Icons.admin_panel_settings_outlined, size: 16),
+                                      onPressed: _dangDangNhap ? null : () => _dienNhanh('admin@xetruong.vn'),
+                                    ),
+                                    ActionChip(
+                                      key: const Key('quick-login-driver'),
+                                      label: const Text('Tài xế'),
+                                      avatar: const Icon(Icons.drive_eta_outlined, size: 16),
+                                      onPressed: _dangDangNhap ? null : () => _dienNhanh('taixe@xetruong.vn'),
+                                    ),
+                                    ActionChip(
+                                      key: const Key('quick-login-monitor'),
+                                      label: const Text('Bảo mẫu'),
+                                      avatar: const Icon(Icons.support_agent_outlined, size: 16),
+                                      onPressed: _dangDangNhap ? null : () => _dienNhanh('baomau@xetruong.vn'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

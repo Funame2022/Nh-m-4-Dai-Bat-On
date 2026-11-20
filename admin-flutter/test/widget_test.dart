@@ -217,14 +217,14 @@ void main() {
     expect(storage.rememberedEmailClearCount, 1);
   });
 
-  testWidgets('vai trò không phải QUAN_LY bị từ chối, không lưu token', (
+  testWidgets('vai trò không có quyền như PHU_HUYNH bị từ chối, không lưu token', (
     tester,
   ) async {
     final storage = FakeTokenStorage();
     final client = MockClient(
       (_) async => jsonResponse({
         'token': 'jwt-sai-quyen',
-        'nguoiDung': nguoiDungJson('TAI_XE'),
+        'nguoiDung': nguoiDungJson('PHU_HUYNH'),
       }, 200),
     );
 
@@ -232,7 +232,7 @@ void main() {
     await dangNhap(tester);
 
     expect(find.byKey(const Key('login-error')), findsOneWidget);
-    expect(find.textContaining('không có quyền quản lý'), findsOneWidget);
+    expect(find.textContaining('không có quyền truy cập'), findsOneWidget);
     expect(find.byKey(const Key('admin-shell')), findsNothing);
     expect(storage.token, isNull);
     expect(storage.saveCount, 0);
@@ -547,7 +547,7 @@ void main() {
     expect(find.text('Trần Văn Tài Xế'), findsOneWidget);
   });
 
-  for (final vaiTro in const ['PHU_HUYNH', 'TAI_XE', 'BAO_MAU', 'UNKNOWN']) {
+  for (final vaiTro in const ['PHU_HUYNH', 'UNKNOWN']) {
     testWidgets('vai trò $vaiTro không mở được shell hay điều hướng đội xe', (
       tester,
     ) async {

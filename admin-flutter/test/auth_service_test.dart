@@ -54,7 +54,28 @@ void main() {
       expect(storage.saveCount, 1);
     });
 
-    for (final vaiTro in ['PHU_HUYNH', 'TAI_XE', 'BAO_MAU', 'UNKNOWN']) {
+    for (final vaiTro in ['TAI_XE', 'BAO_MAU']) {
+      test('cho phép vai trò $vaiTro đăng nhập và lưu token', () async {
+        final storage = FakeTokenStorage();
+        final client = MockClient(
+          (_) async => jsonResponse({
+            'token': 'jwt-$vaiTro',
+            'nguoiDung': nguoiDungJson(vaiTro),
+          }, 200),
+        );
+
+        final nguoiDung = await taoAuthService(
+          client,
+          storage,
+        ).login(email: 'test@xetruong.vn', matKhau: '123456');
+
+        expect(nguoiDung.vaiTro, vaiTro);
+        expect(storage.token, 'jwt-$vaiTro');
+        expect(storage.saveCount, 1);
+      });
+    }
+
+    for (final vaiTro in ['PHU_HUYNH', 'UNKNOWN']) {
       test('từ chối vai trò $vaiTro và không lưu token', () async {
         final storage = FakeTokenStorage();
         final client = MockClient(
@@ -68,12 +89,12 @@ void main() {
           taoAuthService(
             client,
             storage,
-          ).login(email: 'admin@xetruong.vn', matKhau: '123456'),
+          ).login(email: 'user@xetruong.vn', matKhau: '123456'),
           throwsA(
             isA<AuthException>().having(
               (e) => e.message,
               'message',
-              contains('quyền quản lý'),
+              contains('quyền truy cập'),
             ),
           ),
         );

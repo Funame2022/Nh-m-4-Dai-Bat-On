@@ -121,8 +121,8 @@ void main() {
     await tester.pumpWidget(createWidget(client: client));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('diem-dung-card-1')), findsOneWidget);
-    expect(find.byKey(const Key('diem-dung-card-2')), findsOneWidget);
+    expect(find.byKey(const Key('timeline-card-1')), findsOneWidget);
+    expect(find.byKey(const Key('timeline-card-2')), findsOneWidget);
     expect(find.text('Trạm Ngã tư Hàng Xanh'), findsOneWidget);
     expect(find.text('Trường THCS Lê Quý Đôn'), findsOneWidget);
     expect(find.textContaining('06:45'), findsOneWidget);

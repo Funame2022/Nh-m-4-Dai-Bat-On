@@ -4,6 +4,7 @@ import '../../models/nguoi_dung.dart';
 import '../../models/van_hanh.dart';
 import '../../operations/van_hanh_service.dart';
 import '../../widgets/trang_thai_danh_sach.dart';
+import 'widgets/diem_dung_timeline_widget.dart';
 
 class ChiTietChuyenPage extends StatefulWidget {
   const ChiTietChuyenPage({
@@ -245,60 +246,10 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
   }
 
   Widget _buildDiemDungTab(ChiTietChuyenDi chiTiet, ThemeData theme) {
-    final diemDungList = chiTiet.diemDung;
-    final colors = theme.colorScheme;
-
-    if (diemDungList.isEmpty) {
-      return const Center(
-        child: Text('Tuyến xe này chưa được thiết lập điểm dừng đón/trả.'),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: diemDungList.length,
-      itemBuilder: (context, index) {
-        final d = diemDungList[index];
-        final dsHsTaiDiem = chiTiet.dsHocSinhTheoDiem(d.id);
-
-        return Card(
-          key: Key('diem-dung-card-${d.id}'),
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 10),
-          color: colors.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.4),
-            ),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            leading: CircleAvatar(
-              backgroundColor: colors.primaryContainer,
-              foregroundColor: colors.onPrimaryContainer,
-              child: Text(
-                '${d.thuTu}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            title: Text(
-              d.ten,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Row(
-              children: [
-                if (d.gioDuKien != null && d.gioDuKien!.isNotEmpty) ...[
-                  const Icon(Icons.access_time_rounded, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text('${d.gioDuKien} • '),
-                ],
-                Text('${dsHsTaiDiem.length} học sinh đăng ký'),
-              ],
-            ),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-          ),
-        );
+    return DiemDungTimelineWidget(
+      chiTiet: chiTiet,
+      onDiemDanhTaiTram: (diemDung) {
+        _tabController.animateTo(1);
       },
     );
   }

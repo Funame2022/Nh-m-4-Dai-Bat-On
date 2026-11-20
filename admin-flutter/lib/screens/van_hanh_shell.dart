@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
 import '../models/nguoi_dung.dart';
+import '../models/van_hanh.dart';
 import '../operations/van_hanh_service.dart';
-import '../widgets/brand_background.dart';
+import 'operations/chuyen_hom_nay_page.dart';
 import 'settings_screen.dart';
 
 class VanHanhShell extends StatefulWidget {
@@ -74,6 +75,15 @@ class _VanHanhShellState extends State<VanHanhShell> {
     }
   }
 
+  void _moChiTietChuyen(ChuyenDi chuyen) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã chọn ca xe: ${chuyen.tenTuyen} (${chuyen.bienSo})'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_currentIndex == 1) {
       return SettingsScreen(
@@ -88,9 +98,11 @@ class _VanHanhShellState extends State<VanHanhShell> {
       );
     }
 
-    return _CaTrucOverviewPage(
+    return ChuyenHomNayPage(
+      key: const Key('chuyen-hom-nay-page'),
       nguoiDung: widget.nguoiDung,
       vanHanhService: widget.vanHanhService,
+      onChonChuyen: _moChiTietChuyen,
     );
   }
 
@@ -264,192 +276,6 @@ class _VanHanhShellState extends State<VanHanhShell> {
                 ),
         );
       },
-    );
-  }
-}
-
-/// Khung Banner ca trực và thông tin nhân viên
-class _CaTrucOverviewPage extends StatelessWidget {
-  const _CaTrucOverviewPage({
-    required this.nguoiDung,
-    required this.vanHanhService,
-  });
-
-  final NguoiDung nguoiDung;
-  final VanHanhService vanHanhService;
-
-  String _formatNgayHienTai() {
-    final now = DateTime.now();
-    const thu = [
-      'Thứ Hai',
-      'Thứ Ba',
-      'Thứ Tư',
-      'Thứ Năm',
-      'Thứ Sáu',
-      'Thứ Bảy',
-      'Chủ Nhật'
-    ];
-    final tenThu = thu[now.weekday - 1];
-    return '$tenThu, ngày ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final laTaiXe = nguoiDung.laTaiXe;
-    final roleColor = laTaiXe ? Colors.orange.shade700 : Colors.teal.shade700;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Banner Ca trực hôm nay
-          Card(
-            key: const Key('card-ca-truc-header'),
-            elevation: 0,
-            color: colors.surfaceContainerLow,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: colors.outlineVariant.withValues(alpha: 0.6),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: roleColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          laTaiXe
-                              ? Icons.directions_bus_rounded
-                              : Icons.support_agent_rounded,
-                          color: roleColor,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nguoiDung.hoTen,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${nguoiDung.tenVaiTro} • ${nguoiDung.sdt ?? 'SĐT: Chưa có'}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.padLeft ? null : null,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline_rounded,
-                              size: 14,
-                              color: Colors.green.shade800,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Đang trực',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 16,
-                        color: colors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatNgayHienTai(),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Vùng hiển thị trạng thái chuẩn bị vào Chuyến hôm nay
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: colors.outlineVariant.withValues(alpha: 0.5),
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.departure_board_rounded,
-                  size: 48,
-                  color: colors.primary,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Danh sách Chuyến đi Trong ngày',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Theo dõi lộ trình, điểm đón/trả và thực hiện điểm danh học sinh',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

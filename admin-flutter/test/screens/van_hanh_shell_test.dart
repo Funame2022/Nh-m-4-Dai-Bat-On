@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:xe_truong_admin/auth/auth_service.dart';
 import 'package:xe_truong_admin/models/nguoi_dung.dart';
 import 'package:xe_truong_admin/operations/van_hanh_service.dart';
@@ -19,18 +22,27 @@ void main() {
 
   Widget createTestWidget({
     NguoiDung nguoiDung = driverUser,
+    http.Client? client,
     Future<void> Function()? onLogout,
     Future<void> Function()? onToggleTheme,
   }) {
     final storage = FakeTokenStorage('test-token');
-    final client = http.Client();
+    final httpClient = client ??
+        MockClient(
+          (_) async => http.Response(
+            jsonEncode([]),
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        );
+
     final authService = AuthService(
-      client: client,
+      client: httpClient,
       storage: storage,
       baseUrl: 'http://api.test',
     );
     final vanHanhService = VanHanhService(
-      client: client,
+      client: httpClient,
       storage: storage,
       baseUrl: 'http://api.test',
     );
@@ -57,7 +69,7 @@ void main() {
     expect(find.text('TÀI XẾ'), findsOneWidget);
     expect(find.text('Trần Văn Lái Xe'), findsNWidgets(2)); // AppBar and Card
     expect(find.byKey(const Key('card-ca-truc-header')), findsOneWidget);
-    expect(find.text('Đang trực'), findsOneWidget);
+    expect(find.text('Sẵn sàng'), findsOneWidget);
   });
 
   testWidgets('Chuyển tab sang Hồ sơ hiển thị màn hình cài đặt', (tester) async {

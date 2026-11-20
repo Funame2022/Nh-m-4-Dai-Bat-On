@@ -320,6 +320,18 @@ class ChiTietChuyenDi {
     );
   }
 
+  ChiTietChuyenDi copyWith({
+    ChuyenDi? chuyenDi,
+    List<DiemDung>? diemDung,
+    List<HocSinhDiemDanh>? hocSinh,
+  }) {
+    return ChiTietChuyenDi(
+      chuyenDi: chuyenDi ?? this.chuyenDi,
+      diemDung: diemDung ?? this.diemDung,
+      hocSinh: hocSinh ?? this.hocSinh,
+    );
+  }
+
   factory ChiTietChuyenDi.fromJson(Map<String, dynamic> json) {
     final chuyenDiJson = json['chuyenDi'] ?? json['chuyen_di'] ?? {};
     final dsDiemDungJson = json['diemDung'] ?? json['diem_dung'] ?? [];

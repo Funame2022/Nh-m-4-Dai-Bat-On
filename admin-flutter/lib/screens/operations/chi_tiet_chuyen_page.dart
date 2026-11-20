@@ -32,6 +32,7 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
   ChiTietChuyenDi? _chiTiet;
   late TabController _tabController;
   final Set<int> _dangXuLyHocSinh = {};
+  bool _dangXuLyChuyen = false;
 
   @override
   void initState() {
@@ -248,6 +249,231 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
     }
   }
 
+  /// Xác nhận và thực hiện bắt đầu chuyến xe
+  Future<void> _xacNhanBatDauChuyen() async {
+    final xacNhan = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.directions_bus_rounded, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Bắt đầu chuyến đi?'),
+          ],
+        ),
+        content: const Text(
+          'Xe sẽ chuyển sang trạng thái Đang chạy và hệ thống sẽ bắt đầu theo dõi tiến trình lộ trình và điểm danh.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            key: const Key('btn-dialog-xac-nhan-bat-dau'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bắt đầu'),
+          ),
+        ],
+      ),
+    );
+
+    if (xacNhan != true) return;
+
+    setState(() => _dangXuLyChuyen = true);
+    try {
+      final updated = await widget.vanHanhService.batDauChuyen(widget.chuyenId);
+      if (!mounted) return;
+      setState(() {
+        _chiTiet = _chiTiet?.copyWith(chuyenDi: updated);
+        _dangXuLyChuyen = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Chuyến đi đã bắt đầu! Chúc bạn có lộ trình an toàn.'),
+          backgroundColor: Colors.blue.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dangXuLyChuyen = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể bắt đầu chuyến: $e'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Hiển thị Dialog cảnh báo an toàn khi kết thúc chuyến mà còn học sinh chưa xác nhận xuống xe
+  Future<void> _hienDialogCanhBaoChuaXuongXe(
+    String canhBao,
+    List<String> dsChuaXuong,
+  ) async {
+    final List<String> danhSachHienThi = dsChuaXuong.isNotEmpty
+        ? dsChuaXuong
+        : (_chiTiet?.hocSinh
+                .where((h) => !h.coDonBaoNghi && (!h.daLenXe || !h.daXuongXe))
+                .map((h) => '${h.hoTen} (${h.tenLop})')
+                .toList() ??
+            []);
+
+    final xacNhanBoQua = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        key: const Key('dialog-canh-bao-chua-xuong-xe'),
+        icon: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.red.shade700,
+            size: 40,
+          ),
+        ),
+        title: Text(
+          'CẢNH BÁO AN TOÀN TRẺ EM',
+          style: TextStyle(
+            color: Colors.red.shade800,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                canhBao.isNotEmpty
+                    ? canhBao
+                    : 'Còn học sinh chưa được xác nhận xuống xe! Hãy kiểm tra kỹ tất cả các hàng ghế trước khi rời xe để đảm bảo không bỏ quên học sinh!',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              if (danhSachHienThi.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Danh sách học sinh chưa xác nhận:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: danhSachHienThi
+                        .map(
+                          (ten) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline_rounded,
+                                    size: 14, color: Colors.red.shade700),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    ten,
+                                    style: TextStyle(
+                                      color: Colors.red.shade900,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          OutlinedButton(
+            key: const Key('btn-dialog-kiem-tra-lai'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Kiểm tra lại xe'),
+          ),
+          FilledButton(
+            key: const Key('btn-dialog-bo-qua-ket-thuc'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bỏ qua & Kết thúc'),
+          ),
+        ],
+      ),
+    );
+
+    if (xacNhanBoQua == true) {
+      await _thucHienKetThucChuyen(boQua: true);
+    }
+  }
+
+  /// Thực hiện gọi API kết thúc chuyến đi
+  Future<void> _thucHienKetThucChuyen({bool boQua = false}) async {
+    setState(() => _dangXuLyChuyen = true);
+    try {
+      final updated = await widget.vanHanhService.ketThucChuyen(
+        widget.chuyenId,
+        boQua: boQua,
+      );
+      if (!mounted) return;
+      setState(() {
+        _chiTiet = _chiTiet?.copyWith(chuyenDi: updated);
+        _dangXuLyChuyen = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Chuyến đi đã kết thúc thành công!'),
+          backgroundColor: Colors.teal.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on KetThucChuyenException catch (e) {
+      if (!mounted) return;
+      setState(() => _dangXuLyChuyen = false);
+      await _hienDialogCanhBaoChuaXuongXe(e.canhBao, e.danhSachChuaHoanTat);
+    } on VanHanhApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _dangXuLyChuyen = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi kết thúc chuyến: ${e.message}'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dangXuLyChuyen = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể kết nối máy chủ: $e'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Widget _buildThongKeItem({
     required BuildContext context,
     required String tieuDe,
@@ -297,6 +523,92 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
         ],
       ),
     );
+  }
+
+  Widget _buildTripActionButtons(ChuyenDi chuyen, ThemeData theme) {
+    if (_dangXuLyChuyen) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (chuyen.laChuaChay) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          key: const Key('btn-bat-dau-chuyen'),
+          onPressed: _xacNhanBatDauChuyen,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text(
+            'BẮT ĐẦU CHUYẾN',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.blue.shade700,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (chuyen.laDangChay) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          key: const Key('btn-ket-thuc-chuyen'),
+          onPressed: () => _thucHienKetThucChuyen(boQua: false),
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: const Text(
+            'KẾT THÚC CHUYẾN',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.red.shade700,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (chuyen.laHoanThanh) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.teal.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.teal.shade200),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.teal.shade700, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Chuyến đi đã hoàn tất và kết thúc an toàn',
+              style: TextStyle(
+                color: Colors.teal.shade900,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildOverviewHeader(ChiTietChuyenDi chiTiet, ThemeData theme) {
@@ -415,6 +727,9 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
                 ),
               ],
             ),
+
+            const SizedBox(height: 16),
+            _buildTripActionButtons(chuyen, theme),
           ],
         ),
       ),

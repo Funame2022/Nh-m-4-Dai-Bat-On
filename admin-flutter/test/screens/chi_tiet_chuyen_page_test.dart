@@ -314,4 +314,121 @@ void main() {
     expect(find.text('Hoàn tất'), findsOneWidget);
     expect(find.byKey(const Key('btn-xuong-xe-401')), findsNothing);
   });
+
+  testWidgets('Bấm nút BẮT ĐẦU CHUYẾN hiển thị dialog xác nhận và chuyển trạng thái sang Đang chạy', (tester) async {
+    final mockChuaChayJson = {
+      'chuyenDi': {
+        'id': 60,
+        'tuyen_id': 3,
+        'ngay': '2026-11-20',
+        'chieu': 'DON_SANG',
+        'trang_thai': 'CHUA_CHAY',
+        'ten_tuyen': 'Tuyến Q1 - Bình Thạnh',
+        'bien_so': '51B-888.99',
+      },
+      'diemDung': [],
+      'hocSinh': [],
+    };
+
+    bool batDauCalled = false;
+    final client = MockClient((request) async {
+      if (request.url.path.contains('/bat-dau')) {
+        batDauCalled = true;
+        return jsonResponse({
+          'id': 60,
+          'tuyen_id': 3,
+          'ngay': '2026-11-20',
+          'chieu': 'DON_SANG',
+          'trang_thai': 'DANG_CHAY',
+          'ten_tuyen': 'Tuyến Q1 - Bình Thạnh',
+          'bien_so': '51B-888.99',
+        });
+      }
+      return jsonResponse(mockChuaChayJson);
+    });
+
+    final storage = FakeTokenStorage('test-token');
+    final service = VanHanhService(client: client, storage: storage, baseUrl: 'http://api.test');
+
+    await tester.pumpWidget(MaterialApp(
+      home: ChiTietChuyenPage(chuyenId: 60, vanHanhService: service, nguoiDung: testUser),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('btn-bat-dau-chuyen')), findsOneWidget);
+
+    // Bấm Bắt đầu chuyến
+    await tester.tap(find.byKey(const Key('btn-bat-dau-chuyen')));
+    await tester.pumpAndSettle();
+
+    // Dialog xác nhận xuất hiện
+    expect(find.text('Bắt đầu chuyến đi?'), findsOneWidget);
+    expect(find.byKey(const Key('btn-dialog-xac-nhan-bat-dau')), findsOneWidget);
+
+    // Bấm Xác nhận trong dialog
+    await tester.tap(find.byKey(const Key('btn-dialog-xac-nhan-bat-dau')));
+    await tester.pumpAndSettle();
+
+    expect(batDauCalled, isTrue);
+    expect(find.textContaining('Chuyến đi đã bắt đầu!'), findsOneWidget);
+    expect(find.byKey(const Key('btn-ket-thuc-chuyen')), findsOneWidget);
+  });
+
+  testWidgets('Bấm nút KẾT THÚC CHUYẾN khi còn học sinh hiển thị Dialog Cảnh báo an toàn', (tester) async {
+    bool ketThucCalled = false;
+    bool ketThucBoQuaCalled = false;
+
+    final client = MockClient((request) async {
+      if (request.url.path.contains('/ket-thuc')) {
+        if (request.url.queryParameters['boQua'] == 'true') {
+          ketThucBoQuaCalled = true;
+          return jsonResponse({
+            'id': 50,
+            'tuyen_id': 3,
+            'ngay': '2026-11-20',
+            'chieu': 'DON_SANG',
+            'trang_thai': 'DA_HOAN_THANH',
+            'ten_tuyen': 'Tuyến Q1 - Bình Thạnh',
+            'bien_so': '51B-888.99',
+          });
+        }
+
+        ketThucCalled = true;
+        return http.Response(
+          jsonEncode({
+            'loi': 'Con hoc sinh chua xuong xe',
+            'canhBao': 'Còn 1 học sinh đang trên xe chưa được điểm danh xuống!',
+            'danhSachChuaHoanTat': ['Nguyễn Hoàng Nam (3B)'],
+          }),
+          409,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return jsonResponse(mockChiTietJson);
+    });
+
+    await tester.pumpWidget(createWidget(client: client));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('btn-ket-thuc-chuyen')), findsOneWidget);
+
+    // Bấm Kết thúc chuyến
+    await tester.tap(find.byKey(const Key('btn-ket-thuc-chuyen')));
+    await tester.pumpAndSettle();
+
+    expect(ketThucCalled, isTrue);
+
+    // Cảnh báo an toàn hiển thị
+    expect(find.byKey(const Key('dialog-canh-bao-chua-xuong-xe')), findsOneWidget);
+    expect(find.text('CẢNH BÁO AN TOÀN TRẺ EM'), findsOneWidget);
+    expect(find.textContaining('Nguyễn Hoàng Nam (3B)'), findsOneWidget);
+
+    // Bấm Bỏ qua & Kết thúc
+    await tester.tap(find.byKey(const Key('btn-dialog-bo-qua-ket-thuc')));
+    await tester.pumpAndSettle();
+
+    expect(ketThucBoQuaCalled, isTrue);
+    expect(find.textContaining('Chuyến đi đã kết thúc thành công!'), findsOneWidget);
+    expect(find.text('Chuyến đi đã hoàn tất và kết thúc an toàn'), findsOneWidget);
+  });
 }

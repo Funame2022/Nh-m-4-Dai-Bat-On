@@ -7,6 +7,7 @@ import '../../operations/gps_tracker_service.dart';
 import '../../widgets/trang_thai_danh_sach.dart';
 import 'widgets/diem_dung_timeline_widget.dart';
 import 'widgets/hoc_sinh_item_widget.dart';
+import 'widgets/hoc_sinh_list_tab_widget.dart';
 import 'widgets/gps_live_status_widget.dart';
 
 class ChiTietChuyenPage extends StatefulWidget {
@@ -799,35 +800,11 @@ class _ChiTietChuyenPageState extends State<ChiTietChuyenPage>
   }
 
   Widget _buildHocSinhTab(ChiTietChuyenDi chiTiet, ThemeData theme) {
-    final dsHocSinh = chiTiet.hocSinh;
-
-    if (dsHocSinh.isEmpty) {
-      return const Center(
-        child: Text('Chưa có học sinh nào đăng ký trên tuyến này.'),
-      );
-    }
-
-    final Map<int, String> diemDungMap = {
-      for (final d in chiTiet.diemDung) d.id: d.ten,
-    };
-
-    return ListView.builder(
-      key: const PageStorageKey<String>('hoc-sinh-tab-list'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: dsHocSinh.length,
-      itemBuilder: (context, index) {
-        final hs = dsHocSinh[index];
-        final tenTram = hs.diemDungId != null ? diemDungMap[hs.diemDungId] : null;
-
-        return HocSinhItemWidget(
-          key: ValueKey('hoc-sinh-${hs.id}'),
-          hocSinh: hs,
-          tenDiemDung: tenTram,
-          dangXuLy: _dangXuLyHocSinh.contains(hs.id),
-          onDiemDanhLenXe: () => _diemDanhLenXe(hs),
-          onDiemDanhXuongXe: () => _diemDanhXuongXe(hs),
-        );
-      },
+    return HocSinhListTabWidget(
+      chiTiet: chiTiet,
+      dangXuLyHocSinh: _dangXuLyHocSinh,
+      onDiemDanhLenXe: _diemDanhLenXe,
+      onDiemDanhXuongXe: _diemDanhXuongXe,
     );
   }
 

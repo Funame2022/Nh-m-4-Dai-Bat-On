@@ -143,6 +143,30 @@ void main() {
       expect(capNhat.soHocSinhDaXuong, 2);
       expect(capNhat.soHocSinhTrenXe, 0);
       expect(capNhat.hocSinhChuaHoanTat.isEmpty, isTrue);
+
+      // Test copyWith
+      final updatedChuyen = chiTiet.copyWith(
+        chuyenDi: chiTiet.chuyenDi.copyWith(trangThai: TrangThaiChuyen.hoanThanh),
+      );
+      expect(updatedChuyen.chuyenDi.trangThai, TrangThaiChuyen.hoanThanh);
+    });
+
+    test('KetQuaDiemDanh fromJson parses fields accurately', () {
+      final json = {
+        'id': 55,
+        'chuyen_di_id': 10,
+        'hoc_sinh_id': 101,
+        'diem_dung_id': 1,
+        'su_kien': 'LEN_XE',
+        'thoi_diem': '2026-11-20T06:45:00.000Z',
+      };
+      final kq = KetQuaDiemDanh.fromJson(json);
+      expect(kq.id, 55);
+      expect(kq.chuyenDiId, 10);
+      expect(kq.hocSinhId, 101);
+      expect(kq.diemDungId, 1);
+      expect(kq.suKien, 'LEN_XE');
+      expect(kq.thoiDiem, isNotNull);
     });
   });
 }

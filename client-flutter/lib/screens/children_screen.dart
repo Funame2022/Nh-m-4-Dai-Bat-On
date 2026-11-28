@@ -198,13 +198,14 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    SizedBox(
-                                      width: 76,
+                                    ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 112),
                                       child: Text(
-                                        'Chào, ${parentName.split(' ').last}',
+                                        'Chào, ${parentName.trim().split(RegExp(r'\s+')).last}',
                                         textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                        softWrap: true,
+                                        maxLines: 2,
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.bold,

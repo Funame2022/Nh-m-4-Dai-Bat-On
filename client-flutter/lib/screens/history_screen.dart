@@ -57,7 +57,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return false;
       }
       final hsId = tb['hoc_sinh_id'];
-      if (hsId != null && hsId != widget.hocSinhId) return false;
+      if (hsId != null && int.tryParse(hsId.toString()) != widget.hocSinhId) {
+        return false;
+      }
 
       final taoLuc = tb['tao_luc'] as String?;
       if (taoLuc == null) return false;

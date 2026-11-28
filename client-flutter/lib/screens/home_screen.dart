@@ -54,7 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = await ApiService.getThongBao(limit: 1);
       if (!mounted) return;
       setState(() {
-        _unreadCount = data['unreadCount'] as int? ?? 0;
+        _unreadCount =
+            int.tryParse(data['unreadCount']?.toString() ?? '') ?? 0;
       });
     } on SessionExpiredException {
       await _handleSessionExpired();
@@ -107,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     context,
                     SmoothPageRoute(
                       page: BaoNghiScreen(
-                        hocSinhId: first['id'] as int,
+                        hocSinhId:
+                            int.tryParse(first['id']?.toString() ?? '') ?? 0,
                         hoTen: first['ho_ten']?.toString() ?? '',
                       ),
                     ),
@@ -138,7 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     context,
                     SmoothPageRoute(
                       page: NoteBaoMauScreen(
-                        hocSinhId: first['id'] as int,
+                        hocSinhId:
+                            int.tryParse(first['id']?.toString() ?? '') ?? 0,
                         hoTen: first['ho_ten']?.toString() ?? '',
                       ),
                     ),

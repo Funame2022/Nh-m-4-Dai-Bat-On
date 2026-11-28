@@ -433,7 +433,9 @@ class _StudentPassScreenState extends State<StudentPassScreen> {
                               context,
                               SmoothPageRoute(
                                 page: ChildDetailScreen(
-                                  hocSinhId: current['id'] as int,
+                                  hocSinhId: int.tryParse(
+                                          current['id']?.toString() ?? '') ??
+                                      0,
                                   hoTen: hoTen,
                                   anhUrl: current['anh_url']?.toString(),
                                   tenLop: tenLop,

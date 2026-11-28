@@ -38,7 +38,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _notifications = list;
         _loaded = true;
       });
-      widget.onUnreadChanged?.call(data['unreadCount'] as int? ?? 0);
+      widget.onUnreadChanged
+          ?.call(int.tryParse(data['unreadCount']?.toString() ?? '') ?? 0);
       return data;
     } on SessionExpiredException {
       await widget.onSessionExpired();
@@ -217,7 +218,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               itemCount: _notifications.length,
               itemBuilder: (context, index) {
                 final tb = _notifications[index] as Map<String, dynamic>;
-                final int id = tb['id'] as int;
+                final int id = int.tryParse(tb['id']?.toString() ?? '') ?? 0;
                 final String loai = tb['loai_su_kien']?.toString() ?? '';
                 final String tieuDe = tb['tieu_de']?.toString() ?? '';
                 final String noiDung = tb['noi_dung']?.toString() ?? '';

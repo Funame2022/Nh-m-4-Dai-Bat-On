@@ -333,7 +333,10 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                                     context,
                                     SmoothPageRoute(
                                       page: ChildDetailScreen(
-                                        hocSinhId: first['id'] as int,
+                                        hocSinhId: int.tryParse(
+                                                first['id']?.toString() ??
+                                                    '') ??
+                                            0,
                                         hoTen:
                                             first['ho_ten']?.toString() ?? '',
                                         anhUrl: first['anh_url']?.toString(),
@@ -544,7 +547,8 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final child = filtered[index] as Map<String, dynamic>;
-                      final int hocSinhId = child['id'] as int;
+                      final int hocSinhId =
+                          int.tryParse(child['id']?.toString() ?? '') ?? 0;
                       final String hoTen = child['ho_ten'] ?? 'Không rõ';
                       final String maHs = child['ma_hs'] ?? '';
                       final String tenLop = child['ten_lop'] ?? '';

@@ -129,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen>
                     IconButton(
                       onPressed: () => _showInfoDialog(
                         'BusCare Phụ Huynh',
-                        'Hệ thống theo dõi xe đưa đón học sinh — Đề tài 07 (Nhóm 01).',
+                        'Hệ thống theo dõi xe đưa đón học sinh — Đề tài 07 (Nhóm 09).',
                       ),
                       icon: const Icon(Icons.notifications_none_rounded,
                           color: Colors.white),
@@ -357,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           label: 'Thông tin',
                                           onTap: () => _showInfoDialog(
                                             'Thông tin ứng dụng',
-                                            'BusCare Phụ Huynh v1.0\nĐồ án cuối kỳ INT4211 · Đề tài 7 · Nhóm 01',
+                                            'BusCare Phụ Huynh v1.0\nĐồ án cuối kỳ INT4211 · Đề tài 7 · Nhóm 09',
                                           ),
                                         ),
                                       ],

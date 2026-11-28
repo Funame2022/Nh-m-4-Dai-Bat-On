@@ -396,7 +396,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         leading: Icon(Icons.directions_bus_outlined,
                             color: AppTheme.emerald),
                         title: Text('BusCare Phụ Huynh'),
-                        subtitle: Text('Nhóm 01 · INT4211 · Đề tài 07'),
+                        subtitle: Text('Nhóm 09 · INT4211 · Đề tài 07'),
                       ),
                       const Divider(height: 1),
                       ListTile(

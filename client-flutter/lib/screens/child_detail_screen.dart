@@ -419,7 +419,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                 TileLayer(
                   urlTemplate:
                       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.nhom01.school_bus_client',
+                  userAgentPackageName: 'com.nhom09.school_bus_client',
                 ),
                 if (hasGps)
                   MarkerLayer(

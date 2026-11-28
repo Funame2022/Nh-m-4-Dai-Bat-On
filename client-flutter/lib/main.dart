@@ -57,7 +57,7 @@ class _BusCareParentAppState extends State<BusCareParentApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BusCare Phụ Huynh — Nhóm 01',
+      title: 'BusCare Phụ Huynh — Nhóm 09',
       theme: AppTheme.build(Brightness.light),
       darkTheme: AppTheme.build(Brightness.dark),
       themeMode: _themeMode,

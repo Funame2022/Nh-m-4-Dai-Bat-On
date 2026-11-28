@@ -547,6 +547,36 @@ class QuanLyOperationsService {
     _kiemTraThanhCong(response, {200});
   }
 
+  Future<DiemDung> themDiemDung(
+    int tuyenId, {
+    required int thuTu,
+    required String ten,
+    required double viDo,
+    required double kinhDo,
+    String? gioDuKien,
+  }) async {
+    final headers = await _headers(json: true);
+    final response = await _goi(
+      () => _client.post(
+        _uri('/api/quan-ly/tuyen/$tuyenId/diem-dung'),
+        headers: headers,
+        body: jsonEncode({
+          'thuTu': thuTu,
+          'ten': ten,
+          'viDo': viDo,
+          'kinhDo': kinhDo,
+          'gioDuKien': gioDuKien,
+        }),
+      ),
+    );
+    _kiemTraThanhCong(response, {201});
+    return _docMot(
+      response,
+      DiemDung.fromJson,
+      'Phản hồi điểm dừng không hợp lệ.',
+    );
+  }
+
   Future<DiemDung> capNhatDiemDung(
     int tuyenId,
     int diemDungId, {

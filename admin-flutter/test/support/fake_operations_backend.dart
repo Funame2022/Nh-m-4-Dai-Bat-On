@@ -137,6 +137,11 @@ class FakeOperationsBackend {
           diemDung.where((item) => item['tuyen_id'] == tuyenId).toList(),
         );
       }
+      if (segments.length == 5 &&
+          segments[4] == 'diem-dung' &&
+          method == 'POST') {
+        return _taoDiemDung(tuyenId, request);
+      }
       if (segments.length == 6 &&
           segments[4] == 'diem-dung' &&
           method == 'PUT') {
@@ -198,6 +203,27 @@ class FakeOperationsBackend {
     diemDung.removeWhere((item) => item['tuyen_id'] == id);
     assignments.removeWhere((item) => item['tuyen_id'] == id);
     return _json({'thongBao': 'Đã xóa tuyến'});
+  }
+
+  http.Response _taoDiemDung(int tuyenId, http.Request request) {
+    final body = jsonDecode(request.body) as Map<String, dynamic>;
+    if (diemDung.any(
+      (item) => item['tuyen_id'] == tuyenId && item['thu_tu'] == body['thuTu'],
+    )) {
+      return _json({'loi': 'Thứ tự điểm dừng đã tồn tại trong tuyến'}, 409);
+    }
+
+    final item = <String, dynamic>{
+      'id': _idDiemDungTiepTheo++,
+      'tuyen_id': tuyenId,
+      'thu_tu': body['thuTu'],
+      'ten': body['ten'],
+      'vi_do': body['viDo'],
+      'kinh_do': body['kinhDo'],
+      'gio_du_kien': body['gioDuKien'],
+    };
+    diemDung.add(item);
+    return _json(item, 201);
   }
 
   http.Response _capNhatDiemDung(

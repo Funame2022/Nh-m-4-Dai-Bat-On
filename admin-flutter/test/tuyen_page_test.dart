@@ -54,6 +54,19 @@ Future<void> chon(WidgetTester tester, Key key, String nhan) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> chonViTriBanDo(WidgetTester tester, Key buttonKey) async {
+  final button = find.byKey(buttonKey);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+
+  expect(find.byKey(const Key('map-picker-map')), findsOneWidget);
+  await tester.tap(find.byKey(const Key('map-picker-confirm')));
+  await tester.pumpAndSettle();
+}
+
 FakeOperationsBackend taoBackend() => FakeOperationsBackend(
   xe: [
     {'id': 1, 'bien_so': '51B-111.11', 'suc_chua': 29, 'han_dang_kiem': null},
@@ -158,6 +171,23 @@ void main() {
         findsOneWidget,
       );
 
+      await tester.ensureVisible(find.byKey(const Key('diem-dung-add')));
+      await tester.tap(find.byKey(const Key('diem-dung-add')));
+      await tester.pumpAndSettle();
+      await nhap(tester, const Key('diem-dung-form-ten'), 'Điểm C');
+      await chonViTriBanDo(tester, const Key('diem-dung-form-chon-vi-tri'));
+      await tester.ensureVisible(find.byKey(const Key('diem-dung-form-save')));
+      await tester.tap(find.byKey(const Key('diem-dung-form-save')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('diem-dung-row-102')),
+          matching: find.text('Điểm C'),
+        ),
+        findsOneWidget,
+      );
+
       await chon(tester, const Key('assignment-student'), 'Phạm Gia Bảo');
       await chon(tester, const Key('assignment-stop'), 'Điểm A đã sửa');
       await chon(tester, const Key('assignment-chieu'), 'Đón sáng (DON_SANG)');
@@ -202,12 +232,11 @@ void main() {
       );
 
       backend.loiXoaTuyen = true;
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('tuyen-delete-10')),
-        -300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.ensureVisible(find.byKey(const Key('tuyen-delete-10')));
+      await tester.drag(find.byType(ListView).first, const Offset(0, 500));
+      await tester.pumpAndSettle();
+      final nutXoaTuyen = find.byKey(const Key('tuyen-delete-10'));
+      await tester.ensureVisible(nutXoaTuyen);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tuyen-delete-10')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tuyen-delete-confirm')));

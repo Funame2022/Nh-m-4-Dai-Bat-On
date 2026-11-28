@@ -59,7 +59,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       setState(() {
         _notifications = _notifications.map((tb) {
-          return {...tb as Map, 'da_doc_luc': DateTime.now().toIso8601String()};
+          return <String, dynamic>{
+            ...Map<String, dynamic>.from(tb as Map),
+            'da_doc_luc': DateTime.now().toIso8601String(),
+          };
         }).toList();
       });
       widget.onUnreadChanged?.call(0);
@@ -79,8 +82,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await ApiService.docThongBao(id);
       if (!mounted) return;
       setState(() {
-        _notifications[index] = {
-          ..._notifications[index] as Map,
+        _notifications[index] = <String, dynamic>{
+          ...Map<String, dynamic>.from(_notifications[index] as Map),
           'da_doc_luc': DateTime.now().toIso8601String(),
         };
       });
@@ -217,7 +220,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
               itemCount: _notifications.length,
               itemBuilder: (context, index) {
-                final tb = _notifications[index] as Map<String, dynamic>;
+                final tb =
+                    Map<String, dynamic>.from(_notifications[index] as Map);
                 final int id = int.tryParse(tb['id']?.toString() ?? '') ?? 0;
                 final String loai = tb['loai_su_kien']?.toString() ?? '';
                 final String tieuDe = tb['tieu_de']?.toString() ?? '';

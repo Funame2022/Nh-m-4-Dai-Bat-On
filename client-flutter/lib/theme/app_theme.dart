@@ -49,12 +49,13 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: scheme.surfaceContainerLow,
-        elevation: 0,
+        elevation: isLight ? 2 : 0,
+        shadowColor: emerald.withValues(alpha: 0.08),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
             color: isLight
-                ? emerald.withValues(alpha: 0.12)
+                ? emerald.withValues(alpha: 0.1)
                 : Colors.white.withValues(alpha: 0.08),
           ),
         ),

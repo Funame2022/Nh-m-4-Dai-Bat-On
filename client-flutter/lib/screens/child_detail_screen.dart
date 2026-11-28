@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import 'bao_nghi_screen.dart';
 import 'bus_map_screen.dart';
 import 'history_screen.dart';
@@ -72,8 +73,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     // Điều hướng và nhận kết quả trả về từ màn hình BaoNghiScreen (tiêu chí C.2.2)
     final submitted = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => BaoNghiScreen(
+      SmoothPageRoute(
+        page: BaoNghiScreen(
           hocSinhId: widget.hocSinhId,
           hoTen: widget.hoTen,
         ),
@@ -166,8 +167,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => RouteDetailScreen(
+                          SmoothPageRoute(
+                            page: RouteDetailScreen(
                               hocSinhId: widget.hocSinhId,
                               hoTen: widget.hoTen,
                               trackingList: trackingList,
@@ -183,8 +184,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => HistoryScreen(
+                          SmoothPageRoute(
+                            page: HistoryScreen(
                               hocSinhId: widget.hocSinhId,
                               hoTen: widget.hoTen,
                               onSessionExpired: widget.onSessionExpired,
@@ -200,8 +201,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => NoteBaoMauScreen(
+                          SmoothPageRoute(
+                            page: NoteBaoMauScreen(
                               hocSinhId: widget.hocSinhId,
                               hoTen: widget.hoTen,
                               tenTuyen: firstTrip?['ten_tuyen']?.toString(),
@@ -261,44 +262,48 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: url.isEmpty
-                  ? Container(
-                      width: 56,
-                      height: 56,
-                      color: scheme.primaryContainer,
-                      child: Icon(Icons.face_rounded,
-                          size: 32, color: scheme.onPrimaryContainer),
-                    )
-                  : Image.network(
-                      url,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (ctx, child, progress) {
-                        if (progress == null) return child;
-                        return Container(
-                          width: 56,
-                          height: 56,
-                          color: scheme.surfaceContainerHighest,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (ctx, err, st) => Container(
+            Hero(
+              tag: 'student_avatar_${widget.hocSinhId}',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: url.isEmpty
+                    ? Container(
                         width: 56,
                         height: 56,
                         color: scheme.primaryContainer,
                         child: Icon(Icons.face_rounded,
                             size: 32, color: scheme.onPrimaryContainer),
+                      )
+                    : Image.network(
+                        url,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (ctx, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            width: 56,
+                            height: 56,
+                            color: scheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (ctx, err, st) => Container(
+                          width: 56,
+                          height: 56,
+                          color: scheme.primaryContainer,
+                          child: Icon(Icons.face_rounded,
+                              size: 32, color: scheme.onPrimaryContainer),
+                        ),
                       ),
-                    ),
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(

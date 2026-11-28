@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/city_bus_banner.dart';
 
 /// Màn hình Tài khoản — Hỗ trợ Thêm / Sửa / Xóa ảnh đại diện phụ huynh + Đổi tên + Đổi mật khẩu
 class ProfileScreen extends StatefulWidget {
@@ -329,21 +330,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               children: [
-                // ── Profile Header Card với nút Sửa ảnh đại diện ────────────
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.emeraldGradient,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.emerald.withValues(alpha: 0.25),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
+                // ── Profile Header Card với nền xe buýt giống ảnh mẫu ───────
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Stack(
+                    children: [
+                      const CityBusBackdrop(height: 150, animateBus: false),
+                      Container(
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.22),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: Row(
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
                     children: [
                       GestureDetector(
                         onTap: _showAvatarOptions,
@@ -432,6 +433,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ],
                         ),
                       ),
+                    ],
+                  ),
+                ),
                     ],
                   ),
                 ),

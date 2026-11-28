@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/city_bus_banner.dart';
 import '../widgets/ui_effects.dart';
 import 'child_detail_screen.dart';
 
@@ -82,128 +83,210 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
         onRefresh: () async => _refresh(),
         child: CustomScrollView(
           slivers: [
-            // ── Header Xanh Ngọc + Search Bar nổi ─────────────────────────
+            // ── Header kiểu VinBus + Search Card nổi ──────────────────────
             SliverToBoxAdapter(
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      MediaQuery.of(context).padding.top + 14,
-                      20,
-                      48,
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(28),
                     ),
-                    decoration: const BoxDecoration(
-                      gradient: AppTheme.emeraldGradient,
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(28),
-                      ),
-                    ),
-                    child: Row(
+                    child: Stack(
                       children: [
-                        GestureDetector(
-                          onTap: widget.onOpenProfileTab,
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white, width: 2),
-                              color: Colors.white.withValues(alpha: 0.25),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: (_avatarB64 != null &&
-                                      _avatarB64!.isNotEmpty)
-                                  ? Image.memory(
-                                      base64Decode(_avatarB64!),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : const Icon(Icons.person_rounded,
-                                      color: Colors.white, size: 30),
-                            ),
-                          ),
+                        CityBusBackdrop(
+                          height: MediaQuery.of(context).padding.top + 210,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            MediaQuery.of(context).padding.top + 10,
+                            16,
+                            16,
+                          ),
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                parentName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                              // Chuông thông báo bên trái
+                              IconButton(
+                                onPressed: widget.onOpenNotifTab,
+                                icon: Badge(
+                                  isLabelVisible: widget.unreadCount > 0,
+                                  label: Text('${widget.unreadCount}'),
+                                  child: const Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              const Text(
-                                'Chúc bạn một ngày an lành ^^',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
+                              // Tiêu đề BUSCARE + Hồ Chí Minh ở giữa
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'BUSCARE',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 22,
+                                        letterSpacing: 3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.25),
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Hồ Chí Minh',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.keyboard_arrow_down_rounded,
+                                              color: Colors.white, size: 18),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Avatar tròn + Chào, <Tên> bên phải
+                              GestureDetector(
+                                onTap: widget.onOpenProfileTab,
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: AppTheme.limeGreen,
+                                            width: 2.5),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.25),
+                                      ),
+                                      child: ClipOval(
+                                        child: (_avatarB64 != null &&
+                                                _avatarB64!.isNotEmpty)
+                                            ? Image.memory(
+                                                base64Decode(_avatarB64!),
+                                                fit: BoxFit.cover,
+                                              )
+                                            : const Icon(Icons.person_rounded,
+                                                color: Colors.white, size: 28),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    SizedBox(
+                                      width: 76,
+                                      child: Text(
+                                        'Chào, ${parentName.split(' ').last}',
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black38,
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: widget.onOpenNotifTab,
-                          icon: Badge(
-                            isLabelVisible: widget.unreadCount > 0,
-                            label: Text('${widget.unreadCount}'),
-                            child: const Icon(
-                              Icons.notifications_none_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                  // Thanh tìm kiếm nổi
+                  // Card tìm kiếm nổi đè lên mép dưới banner (giống ảnh VinBus)
                   Positioned(
-                    left: 20,
-                    right: 20,
-                    bottom: -24,
+                    left: 16,
+                    right: 16,
+                    bottom: -44,
                     child: Material(
                       elevation: 6,
                       shadowColor: Colors.black.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(18),
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (v) => setState(() => _query = v.trim()),
-                        decoration: InputDecoration(
-                          hintText: 'Tìm kiếm con em, mã HS, lớp...',
-                          prefixIcon: const Icon(Icons.search_rounded,
-                              color: AppTheme.emerald),
-                          suffixIcon: _query.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear_rounded),
-                                  onPressed: () {
-                                    _searchCtrl.clear();
-                                    setState(() => _query = '');
-                                  },
-                                )
-                              : IconButton(
-                                  icon: const Icon(Icons.refresh_rounded,
-                                      color: AppTheme.emerald),
-                                  onPressed: _refresh,
+                      color: scheme.surfaceContainerLowest,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: _searchCtrl,
+                              onChanged: (v) =>
+                                  setState(() => _query = v.trim()),
+                              decoration: InputDecoration(
+                                hintText: 'Nhập tên bé, mã HS hoặc lớp...',
+                                prefixIcon: const Icon(
+                                    Icons.location_on_outlined,
+                                    color: AppTheme.emerald),
+                                suffixIcon: _query.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear_rounded),
+                                        onPressed: () {
+                                          _searchCtrl.clear();
+                                          setState(() => _query = '');
+                                        },
+                                      )
+                                    : IconButton(
+                                        icon: const Icon(Icons.refresh_rounded,
+                                            color: AppTheme.emerald),
+                                        onPressed: _refresh,
+                                      ),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                filled: false,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                            ),
+                            const Divider(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _QuickTag(
+                                    label: '[Đón] Ca sáng · 06:30',
+                                    onTap: () {
+                                      _searchCtrl.clear();
+                                      setState(() => _query = '');
+                                    },
+                                  ),
                                 ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _QuickTag(
+                                    label: '[Trả] Ca chiều · 16:30',
+                                    onTap: widget.onOpenQrTab,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -212,7 +295,7 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 36)),
+            const SliverToBoxAdapter(child: SizedBox(height: 58)),
 
             // ── 2 Card nổi bật (Cam & Xanh ngọc giống ảnh 2) ──────────────
             SliverToBoxAdapter(
@@ -574,6 +657,38 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickTag extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickTag({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.mintBg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.emeraldDark,
+          ),
         ),
       ),
     );

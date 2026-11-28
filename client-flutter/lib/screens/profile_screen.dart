@@ -490,6 +490,8 @@ class _EditNameDialogState extends State<_EditNameDialog> {
               controller: _controller,
               enabled: !_saving,
               autofocus: true,
+              keyboardType: TextInputType.name,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Họ và tên'),
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Vui lòng nhập họ tên'

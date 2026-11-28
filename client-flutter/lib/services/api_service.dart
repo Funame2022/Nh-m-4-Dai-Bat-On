@@ -21,7 +21,7 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
     return {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       if (token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }

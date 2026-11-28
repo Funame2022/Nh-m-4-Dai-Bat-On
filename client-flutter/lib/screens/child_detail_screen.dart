@@ -51,7 +51,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     }
   }
 
-  void _refresh({bool silent = false}) {
+  void _refresh() {
     if (!mounted) return;
     setState(() {
       _futureTracking = _loadTracking();

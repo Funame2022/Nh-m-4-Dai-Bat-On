@@ -42,6 +42,22 @@ class ApiService {
     await prefs.setString('theme_mode', mode);
   }
 
+  // ─── Ảnh đại diện phụ huynh (lưu base64 cục bộ) ────────────────────────────
+  static Future<String?> getParentAvatarBase64() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('parent_avatar_b64');
+  }
+
+  static Future<void> saveParentAvatarBase64(String b64) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('parent_avatar_b64', b64);
+  }
+
+  static Future<void> clearParentAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('parent_avatar_b64');
+  }
+
   // ─── 1. Đăng nhập ─────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login(
       String email, String matKhau) async {

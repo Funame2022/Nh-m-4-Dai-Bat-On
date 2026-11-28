@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
-/// Màn hình Tài khoản — tương thích đầy đủ với auth.js (đổi tên, đổi mật khẩu, theme, đăng xuất)
+/// Màn hình Tài khoản — Hỗ trợ Thêm / Sửa / Xóa ảnh đại diện phụ huynh + Đổi tên + Đổi mật khẩu
 class ProfileScreen extends StatefulWidget {
   final bool isDark;
   final Future<void> Function() onToggleTheme;
   final VoidCallback onLogout;
   final Future<void> Function() onSessionExpired;
+  final VoidCallback? onProfileChanged;
 
   const ProfileScreen({
     super.key,
@@ -14,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
     required this.onToggleTheme,
     required this.onLogout,
     required this.onSessionExpired,
+    this.onProfileChanged,
   });
 
   @override
@@ -22,7 +27,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _nguoiDung;
+  String? _avatarB64;
   bool _loading = true;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -32,11 +39,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final cached = await ApiService.getNguoiDungHienTai();
+    final avatar = await ApiService.getParentAvatarBase64();
     if (!mounted) return;
     setState(() {
       _nguoiDung = cached;
+      _avatarB64 = avatar;
       _loading = false;
     });
+  }
+
+  Future<void> _pickAvatar(ImageSource source) async {
+    try {
+      final file = await _picker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      final b64 = base64Encode(bytes);
+      await ApiService.saveParentAvatarBase64(b64);
+      if (!mounted) return;
+      setState(() => _avatarB64 = b64);
+      widget.onProfileChanged?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã cập nhật ảnh đại diện!'),
+          backgroundColor: AppTheme.emerald,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể chọn ảnh trên thiết bị này'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showAvatarOptions() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Ảnh đại diện phụ huynh',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFE6F6ED),
+                child: Icon(Icons.photo_library_rounded,
+                    color: AppTheme.emerald),
+              ),
+              title: const Text('Chọn ảnh từ thư viện'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAvatar(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFFFF0E6),
+                child: Icon(Icons.camera_alt_rounded,
+                    color: AppTheme.warmOrange),
+              ),
+              title: const Text('Chụp ảnh mới'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAvatar(ImageSource.camera);
+              },
+            ),
+            if (_avatarB64 != null && _avatarB64!.isNotEmpty)
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFFDECEC),
+                  child: Icon(Icons.delete_outline_rounded,
+                      color: Colors.redAccent),
+                ),
+                title: const Text(
+                  'Xóa ảnh đại diện',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await ApiService.clearParentAvatar();
+                  if (!mounted) return;
+                  setState(() => _avatarB64 = null);
+                  widget.onProfileChanged?.call();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showEditNameDialog() async {
@@ -91,10 +199,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     controller.dispose();
     if (updated == true && mounted) {
       await _loadProfile();
+      widget.onProfileChanged?.call();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Đã cập nhật họ tên'),
+          backgroundColor: AppTheme.emerald,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -175,6 +285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Đã đổi mật khẩu thành công'),
+          backgroundColor: AppTheme.emerald,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -212,66 +323,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tài khoản'),
-      ),
+      appBar: AppBar(title: const Text('Tài khoản cá nhân')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 34,
-                          backgroundColor: scheme.primaryContainer,
-                          child: Icon(Icons.person_rounded,
-                              size: 38, color: scheme.onPrimaryContainer),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _nguoiDung?['hoTen']?.toString() ?? 'Phụ huynh',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _nguoiDung?['email']?.toString() ?? '',
-                                style: TextStyle(
-                                    color: scheme.onSurfaceVariant,
-                                    fontSize: 13),
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                // ── Profile Header Card với nút Sửa ảnh đại diện ────────────
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.emeraldGradient,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.emerald.withValues(alpha: 0.25),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: _showAvatarOptions,
+                        child: Stack(
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: Container(
+                                key: ValueKey(_avatarB64?.length ?? 0),
+                                width: 74,
+                                height: 74,
                                 decoration: BoxDecoration(
-                                  color: scheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(22),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2.5),
+                                  color: Colors.white.withValues(alpha: 0.25),
                                 ),
-                                child: Text(
-                                  'Phụ huynh · ${_nguoiDung?['sdt'] ?? ''}',
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(19),
+                                  child: (_avatarB64 != null &&
+                                          _avatarB64!.isNotEmpty)
+                                      ? Image.memory(
+                                          base64Decode(_avatarB64!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : const Icon(Icons.person_rounded,
+                                          size: 42, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.warmOrange,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded,
+                                    color: Colors.white, size: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _nguoiDung?['hoTen']?.toString() ?? 'Phụ huynh',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _nguoiDung?['email']?.toString() ?? '',
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 13),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: _showAvatarOptions,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'Chạm để đổi ảnh đại diện',
                                   style: TextStyle(
+                                    color: Colors.white,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: scheme.onPrimaryContainer,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -279,21 +440,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.edit_outlined),
+                        leading: const Icon(Icons.badge_outlined,
+                            color: AppTheme.emerald),
+                        title: const Text('Số điện thoại'),
+                        subtitle: Text(
+                            _nguoiDung?['sdt']?.toString() ?? 'Chưa cập nhật'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.edit_outlined,
+                            color: AppTheme.emerald),
                         title: const Text('Đổi họ tên hiển thị'),
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: _showEditNameDialog,
                       ),
                       const Divider(height: 1),
                       ListTile(
-                        leading: const Icon(Icons.lock_reset_rounded),
+                        leading: const Icon(Icons.lock_reset_rounded,
+                            color: AppTheme.emerald),
                         title: const Text('Đổi mật khẩu'),
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: _showChangePasswordDialog,
                       ),
                       const Divider(height: 1),
                       SwitchListTile(
-                        secondary: const Icon(Icons.dark_mode_outlined),
+                        secondary: Icon(Icons.dark_mode_outlined,
+                            color: scheme.primary),
                         title: const Text('Giao diện tối (Dark Mode)'),
                         value: widget.isDark,
                         onChanged: (_) => widget.onToggleTheme(),
@@ -306,9 +478,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       const ListTile(
-                        leading: Icon(Icons.directions_bus_outlined),
+                        leading: Icon(Icons.directions_bus_outlined,
+                            color: AppTheme.emerald),
                         title: Text('BusCare Phụ Huynh'),
-                        subtitle: Text('Nhóm 01 · INT4211 · Đề 7'),
+                        subtitle: Text('Nhóm 01 · INT4211 · Đề tài 07'),
                       ),
                       const Divider(height: 1),
                       ListTile(
@@ -317,8 +490,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: const Text(
                           'Đăng xuất',
                           style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.w600),
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         onTap: _logout,
                       ),

@@ -79,51 +79,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
-  Future<void> _openNotificationTarget(
-    int index,
-    Map<String, dynamic> tb,
-    int id,
-    bool daDoc,
-  ) async {
-    if (!daDoc) {
-      await _markOneRead(index, id);
-    }
-    try {
-      final children = await ApiService.getChildren();
-      if (!mounted || children.isEmpty) return;
-
-      final targetHsId = int.tryParse(tb['hoc_sinh_id']?.toString() ?? '');
-      Map<String, dynamic> child =
-          Map<String, dynamic>.from(children.first as Map);
-      if (targetHsId != null) {
-        for (final c in children) {
-          final m = Map<String, dynamic>.from(c as Map);
-          if (int.tryParse(m['id']?.toString() ?? '') == targetHsId) {
-            child = m;
-            break;
-          }
-        }
-      }
-
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        SmoothPageRoute(
-          page: ChildDetailScreen(
-            hocSinhId: int.tryParse(child['id']?.toString() ?? '') ?? 0,
-            hoTen: child['ho_ten']?.toString() ?? 'Học sinh',
-            anhUrl: child['anh_url']?.toString(),
-            tenLop: child['ten_lop']?.toString(),
-            tenTruong: child['ten_truong']?.toString(),
-            onSessionExpired: widget.onSessionExpired,
-          ),
-        ),
-      );
-    } on SessionExpiredException {
-      await widget.onSessionExpired();
-    } catch (_) {}
-  }
-
   Future<void> _markOneRead(int index, int id) async {
     try {
       await ApiService.docThongBao(id);

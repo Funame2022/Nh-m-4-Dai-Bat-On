@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/ui_effects.dart';
 
 /// Màn hình Lịch sử đi xe theo tháng (ListView.builder từ API)
 class HistoryScreen extends StatefulWidget {
@@ -143,7 +144,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               future: _futureThongBao,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const ShimmerListPlaceholder(itemCount: 4);
                 }
                 if (snapshot.hasError) {
                   return Center(

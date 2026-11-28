@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/ui_effects.dart';
 import 'notification_settings_screen.dart';
 
 /// Màn hình Thông báo — ListView.builder + AlertDialog xác nhận xóa + SnackBar Hoàn tác
@@ -171,7 +172,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         builder: (context, snapshot) {
           if (!_loaded &&
               snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: ShimmerListPlaceholder(itemCount: 5),
+            );
           }
           if (snapshot.hasError && _notifications.isEmpty) {
             return Center(

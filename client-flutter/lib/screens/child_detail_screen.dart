@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ui_effects.dart';
 import 'bao_nghi_screen.dart';
 import 'bus_map_screen.dart';
 import 'history_screen.dart';
@@ -112,7 +113,10 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
         future: _futureTracking,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: ShimmerListPlaceholder(itemCount: 4, itemHeight: 100),
+            );
           }
           if (snapshot.hasError) {
             return Center(
@@ -507,22 +511,25 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                         fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                if (trangThai == 'DANG_CHAY')
+                  const LivePulseBadge(label: 'LIVE')
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const Divider(height: 20),
@@ -540,50 +547,29 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Điểm danh hôm nay',
+              'Hành trình & Điểm danh hôm nay',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 6),
-            if (lichSu.isEmpty)
-              Text(
-                'Chưa có lượt điểm danh nào.',
-                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
-              )
-            else
-              ...lichSu.map((dd) {
-                final suKien = dd['su_kien']?.toString() ?? '';
-                final thoiDiem = dd['thoi_diem']?.toString() ?? '';
-                final isLen = suKien == 'LEN_XE';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isLen ? Icons.login_rounded : Icons.logout_rounded,
-                        size: 18,
-                        color: isLen ? Colors.green : Colors.orange,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isLen ? 'Đã lên xe' : 'Đã xuống xe',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _formatTime(thoiDiem),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+            const SizedBox(height: 12),
+            Builder(builder: (_) {
+              String? gioLen;
+              String? gioXuong;
+              for (final dd in lichSu) {
+                final sk = dd['su_kien']?.toString() ?? '';
+                final td = _formatTime(dd['thoi_diem']?.toString());
+                if (sk == 'LEN_XE') gioLen = td;
+                if (sk == 'XUONG_XE') gioXuong = td;
+              }
+              return TripTimeline(
+                trangThaiChuyen: trangThai,
+                gioLenXe: gioLen,
+                gioXuongXe: gioXuong,
+              );
+            }),
           ],
         ),
       ),

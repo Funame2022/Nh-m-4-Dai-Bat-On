@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ui_effects.dart';
 import 'child_detail_screen.dart';
 
 /// Màn hình Trang chủ Dashboard — lấy cảm hứng từ ảnh mẫu 2
@@ -403,10 +404,7 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                 future: _futureChildren,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
+                    return const ShimmerListPlaceholder(itemCount: 3);
                   }
                   if (snapshot.hasError) {
                     return Padding(
@@ -599,9 +597,8 @@ class _FeatureTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return TapBounce(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

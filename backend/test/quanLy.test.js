@@ -297,6 +297,68 @@ test('PUT diem dung tra 409 khi thu tu bi trung trong tuyen', async () => {
   assert.equal(soLanCapNhat, 0);
 });
 
+// ================= POST /tuyen/:tuyenId/diem-dung =================
+
+test('POST diem dung them thanh cong', async () => {
+  const cacLenh = [];
+  hienTai.trongGiaoDich = async (callback) => callback({
+    query: async (sql, params) => {
+      cacLenh.push({ sql, params });
+      if (/FOR UPDATE/.test(sql)) return { rows: [{ id: 2 }] };
+      if (/SELECT id FROM diem_dung WHERE tuyen_id = \$1 AND thu_tu = \$2/.test(sql)) {
+        return { rows: [] };
+      }
+      if (/INSERT INTO diem_dung/.test(sql)) {
+        return {
+          rows: [{
+            id: 8,
+            tuyen_id: 2,
+            thu_tu: 4,
+            ten: 'Cổng phụ',
+            vi_do: 10.75,
+            kinh_do: 106.68,
+            gio_du_kien: '07:15',
+          }],
+        };
+      }
+      throw new Error(`SQL khong mong doi: ${sql}`);
+    },
+  });
+
+  const kq = await goi('/api/quan-ly/tuyen/2/diem-dung', {
+    method: 'POST',
+    body: JSON.stringify(BODY_DIEM_DUNG),
+  });
+
+  assert.equal(kq.status, 201);
+  assert.equal(kq.body.id, 8);
+  assert.equal(kq.body.tuyen_id, 2);
+  const lenhChen = cacLenh.find(({ sql }) => /INSERT INTO diem_dung/.test(sql));
+  assert.deepEqual(lenhChen.params, [2, 4, 'Cổng phụ', 10.75, 106.68, '07:15']);
+});
+
+test('POST diem dung tra 409 khi thu tu bi trung trong tuyen', async () => {
+  let daChen = false;
+  hienTai.trongGiaoDich = async (callback) => callback({
+    query: async (sql) => {
+      if (/FOR UPDATE/.test(sql)) return { rows: [{ id: 2 }] };
+      if (/SELECT id FROM diem_dung WHERE tuyen_id = \$1 AND thu_tu = \$2/.test(sql)) {
+        return { rows: [{ id: 9 }] };
+      }
+      if (/INSERT INTO diem_dung/.test(sql)) daChen = true;
+      throw new Error(`SQL khong mong doi: ${sql}`);
+    },
+  });
+
+  const kq = await goi('/api/quan-ly/tuyen/2/diem-dung', {
+    method: 'POST',
+    body: JSON.stringify(BODY_DIEM_DUNG),
+  });
+
+  assert.equal(kq.status, 409);
+  assert.equal(daChen, false);
+});
+
 // ================= GET /giam-sat =================
 
 test('GET /giam-sat lay vi tri va thoi diem tu cung mot ban ghi GPS moi nhat', async () => {

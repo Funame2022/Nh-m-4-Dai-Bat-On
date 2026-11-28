@@ -270,6 +270,74 @@ router.put('/tuyen/:tuyenId/diem-dung/:diemDungId', async (req, res) => {
   }
 });
 
+router.post('/tuyen/:tuyenId/diem-dung', async (req, res) => {
+  const { tuyenId } = req.params;
+  if (!laIdDuong(tuyenId)) {
+    return res.status(400).json({ loi: 'Ma tuyen khong hop le' });
+  }
+
+  const body = req.body || {};
+  const { thuTu, ten, viDo, kinhDo, gioDuKien } = body;
+
+  if (!laSoNguyenDuong(thuTu)) {
+    return res.status(400).json({ loi: 'thuTu phai la so nguyen duong' });
+  }
+  if (typeof ten !== 'string' || ten.trim() === '') {
+    return res.status(400).json({ loi: 'ten khong duoc de trong' });
+  }
+  if (!laToaDo(viDo, -90, 90)) {
+    return res.status(400).json({ loi: 'viDo phai nam trong khoang -90 den 90' });
+  }
+  if (!laToaDo(kinhDo, -180, 180)) {
+    return res.status(400).json({ loi: 'kinhDo phai nam trong khoang -180 den 180' });
+  }
+  if (gioDuKien !== null && gioDuKien !== undefined && !laGioHopLe(gioDuKien)) {
+    return res.status(400).json({ loi: 'gioDuKien phai la null hoac dinh dang HH:mm' });
+  }
+
+  const soTuyenId = Number(tuyenId);
+  const soThuTu = Number(thuTu);
+  const tenDiemDung = ten.trim();
+  const soViDo = Number(viDo);
+  const soKinhDo = Number(kinhDo);
+  const gio = gioDuKien ?? null;
+
+  try {
+    const kq = await trongGiaoDich(async (client) => {
+      const tuyen = await client.query(
+        'SELECT id FROM tuyen WHERE id = $1 FOR UPDATE',
+        [soTuyenId],
+      );
+      if (!tuyen.rows[0]) {
+        const loi = new Error('Khong tim thay tuyen');
+        loi.trangThai = 404;
+        throw loi;
+      }
+
+      const trungThuTu = await client.query(
+        'SELECT id FROM diem_dung WHERE tuyen_id = $1 AND thu_tu = $2',
+        [soTuyenId, soThuTu],
+      );
+      if (trungThuTu.rows[0]) {
+        const loi = new Error('Thu tu diem dung da ton tai trong tuyen');
+        loi.trangThai = 409;
+        throw loi;
+      }
+
+      const chen = await client.query(
+        `INSERT INTO diem_dung (tuyen_id, thu_tu, ten, vi_do, kinh_do, gio_du_kien)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [soTuyenId, soThuTu, tenDiemDung, soViDo, soKinhDo, gio],
+      );
+      return chen.rows[0];
+    });
+    res.status(201).json(kq);
+  } catch (e) {
+    res.status(e.trangThai || 400).json({ loi: e.message });
+  }
+});
+
 router.delete('/tuyen/:id', async (req, res) => {
   try {
     const ketQua = await trongGiaoDich(async (client) => {

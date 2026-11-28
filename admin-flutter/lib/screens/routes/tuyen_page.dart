@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
+import 'map_picker_screen.dart';
 import '../../fleet/quan_ly_service.dart';
 import '../../operations/quan_ly_operations_service.dart';
 import '../../widgets/brand_background.dart';
@@ -254,6 +256,35 @@ class _TuyenPageState extends State<TuyenPage> {
     if (mounted) _thongBao('Đã cập nhật điểm dừng.');
   }
 
+  Future<void> _moThemDiemDung() async {
+    final tuyenId = _selectedId;
+    if (tuyenId == null) return;
+
+    final thuTuTiepTheo = _diemDung.isEmpty
+        ? 1
+        : _diemDung.map((diem) => diem.thuTu).reduce((a, b) => a > b ? a : b) +
+              1;
+
+    final thanhCong = await showDialog<bool>(
+      context: context,
+      builder: (context) => DiemDungFormDialog(
+        danhSachHienCo: _diemDung,
+        thuTuMacDinh: thuTuTiepTheo,
+        onSubmit: (duLieu) => widget.operationsService.themDiemDung(
+          tuyenId,
+          thuTu: duLieu.thuTu,
+          ten: duLieu.ten,
+          viDo: duLieu.viDo,
+          kinhDo: duLieu.kinhDo,
+          gioDuKien: duLieu.gioDuKien,
+        ),
+      ),
+    );
+    if (!mounted || thanhCong != true) return;
+    await _chonTuyen(tuyenId);
+    if (mounted) _thongBao('Đã thêm điểm dừng.');
+  }
+
   Future<void> _ganHocSinh() async {
     final tuyenId = _selectedId;
     final hocSinhId = _hocSinhChon;
@@ -389,7 +420,18 @@ class _TuyenPageState extends State<TuyenPage> {
             thongDiep: _loiChiTiet!,
             onThuLai: () => _chonTuyen(tuyen.id),
           ),
-        Text('Điểm dừng', style: theme.textTheme.titleMedium),
+        Row(
+          children: [
+            Text('Điểm dừng', style: theme.textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              key: const Key('diem-dung-add'),
+              onPressed: _moThemDiemDung,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Thêm điểm dừng'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         if (_diemDung.isEmpty)
           const Text('Chưa có điểm dừng.')
@@ -1108,13 +1150,15 @@ class DiemDungFormData {
 class DiemDungFormDialog extends StatefulWidget {
   const DiemDungFormDialog({
     super.key,
-    required this.diemDung,
+    this.diemDung,
     required this.danhSachHienCo,
+    this.thuTuMacDinh,
     required this.onSubmit,
   });
 
-  final DiemDung diemDung;
+  final DiemDung? diemDung;
   final List<DiemDung> danhSachHienCo;
+  final int? thuTuMacDinh;
   final Future<DiemDung> Function(DiemDungFormData duLieu) onSubmit;
 
   @override
@@ -1125,36 +1169,31 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _thuTuController;
   late final TextEditingController _tenController;
-  late final TextEditingController _viDoController;
-  late final TextEditingController _kinhDoController;
   late final TextEditingController _gioController;
+  LatLng? _viTri;
   bool _dangLuu = false;
   String? _loi;
+
+  bool get _laThem => widget.diemDung == null;
 
   @override
   void initState() {
     super.initState();
     _thuTuController = TextEditingController(
-      text: widget.diemDung.thuTu.toString(),
+      text: (widget.diemDung?.thuTu ?? widget.thuTuMacDinh ?? 1).toString(),
     );
-    _tenController = TextEditingController(text: widget.diemDung.ten);
-    _viDoController = TextEditingController(
-      text: widget.diemDung.viDo.toString(),
-    );
-    _kinhDoController = TextEditingController(
-      text: widget.diemDung.kinhDo.toString(),
-    );
+    _tenController = TextEditingController(text: widget.diemDung?.ten ?? '');
     _gioController = TextEditingController(
-      text: widget.diemDung.gioDuKien ?? '',
+      text: widget.diemDung?.gioDuKien ?? '',
     );
+    final diemDung = widget.diemDung;
+    _viTri = diemDung == null ? null : LatLng(diemDung.viDo, diemDung.kinhDo);
   }
 
   @override
   void dispose() {
     _thuTuController.dispose();
     _tenController.dispose();
-    _viDoController.dispose();
-    _kinhDoController.dispose();
     _gioController.dispose();
     super.dispose();
   }
@@ -1163,17 +1202,9 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
     final so = int.tryParse(value?.trim() ?? '');
     if (so == null || so <= 0) return 'TT > 0';
     final trung = widget.danhSachHienCo.any(
-      (diem) => diem.id != widget.diemDung.id && diem.thuTu == so,
+      (diem) => diem.id != widget.diemDung?.id && diem.thuTu == so,
     );
     if (trung) return 'Thứ tự đã được dùng';
-    return null;
-  }
-
-  String? _validateToaDo(String? value, double nhoNhat, double lonNhat) {
-    final so = double.tryParse(value?.trim() ?? '');
-    if (so == null || !so.isFinite || so < nhoNhat || so > lonNhat) {
-      return 'Không hợp lệ';
-    }
     return null;
   }
 
@@ -1186,9 +1217,20 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
     return null;
   }
 
+  Future<void> _chonViTri() async {
+    final viTri = await MapPickerScreen.mo(context, initial: _viTri);
+    if (!mounted || viTri == null) return;
+    setState(() => _viTri = viTri);
+  }
+
   Future<void> _luu() async {
     if (_dangLuu) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final viTri = _viTri;
+    if (viTri == null) {
+      setState(() => _loi = 'Vui lòng chọn vị trí trên bản đồ.');
+      return;
+    }
 
     setState(() {
       _dangLuu = true;
@@ -1200,8 +1242,8 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
         DiemDungFormData(
           thuTu: int.parse(_thuTuController.text.trim()),
           ten: _tenController.text.trim(),
-          viDo: double.parse(_viDoController.text.trim()),
-          kinhDo: double.parse(_kinhDoController.text.trim()),
+          viDo: viTri.latitude,
+          kinhDo: viTri.longitude,
           gioDuKien: _gioController.text.trim().isEmpty
               ? null
               : _gioController.text.trim(),
@@ -1224,7 +1266,7 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('Sửa điểm dừng'),
+      title: Text(_laThem ? 'Thêm điểm dừng' : 'Sửa điểm dừng'),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -1256,38 +1298,33 @@ class _DiemDungFormDialogState extends State<DiemDungFormDialog> {
                   },
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        key: const Key('diem-dung-form-vi-do'),
-                        controller: _viDoController,
-                        enabled: !_dangLuu,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                          signed: true,
-                        ),
-                        decoration: const InputDecoration(labelText: 'Vĩ độ *'),
-                        validator: (value) => _validateToaDo(value, -90, 90),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        key: const Key('diem-dung-form-kinh-do'),
-                        controller: _kinhDoController,
-                        enabled: !_dangLuu,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                          signed: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Kinh độ *',
-                        ),
-                        validator: (value) => _validateToaDo(value, -180, 180),
-                      ),
-                    ),
-                  ],
+                OutlinedButton.icon(
+                  key: const Key('diem-dung-form-chon-vi-tri'),
+                  onPressed: _dangLuu ? null : _chonViTri,
+                  icon: const Icon(Icons.map_outlined),
+                  label: Text(
+                    _viTri == null
+                        ? 'Chọn vị trí trên bản đồ'
+                        : 'Đổi vị trí trên bản đồ',
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _viTri == null
+                      ? 'Chưa chọn vị trí'
+                      : 'Tọa độ: ${_viTri!.latitude.toStringAsFixed(6)}, '
+                            '${_viTri!.longitude.toStringAsFixed(6)}',
+                  key: const Key('diem-dung-form-toa-do'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tọa độ chỉ hiển thị vị trí bạn đã chọn.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

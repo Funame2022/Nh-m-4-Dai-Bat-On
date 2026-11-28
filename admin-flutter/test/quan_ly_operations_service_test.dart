@@ -281,6 +281,49 @@ void main() {
     expect(diemDung.gioDuKien, isNull);
   });
 
+  test('themDiemDung gửi POST và đọc điểm dừng trả về', () async {
+    final storage = FakeTokenStorage('saved-token');
+    late http.Request request;
+    final client = MockClient((req) async {
+      request = req;
+      return jsonResponse({
+        'id': 10,
+        'tuyen_id': 5,
+        'thu_tu': 3,
+        'ten': 'Bến xe',
+        'vi_do': 10.77,
+        'kinh_do': 106.69,
+        'gio_du_kien': '07:00',
+      }, 201);
+    });
+
+    final diemDung = await taoService(client, storage).themDiemDung(
+      5,
+      thuTu: 3,
+      ten: 'Bến xe',
+      viDo: 10.77,
+      kinhDo: 106.69,
+      gioDuKien: '07:00',
+    );
+
+    expect(request.method, 'POST');
+    expect(
+      request.url.toString(),
+      'http://api.test/api/quan-ly/tuyen/5/diem-dung',
+    );
+    expect(request.headers['Authorization'], 'Bearer saved-token');
+    expect(jsonDecode(request.body), {
+      'thuTu': 3,
+      'ten': 'Bến xe',
+      'viDo': 10.77,
+      'kinhDo': 106.69,
+      'gioDuKien': '07:00',
+    });
+    expect(diemDung.id, 10);
+    expect(diemDung.tuyenId, 5);
+    expect(diemDung.thuTu, 3);
+  });
+
   test('layDanhSachBaoMau đọc snake_case và bearer token', () async {
     final storage = FakeTokenStorage('saved-token');
     late http.Request request;

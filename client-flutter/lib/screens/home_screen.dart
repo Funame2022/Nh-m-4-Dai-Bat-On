@@ -189,6 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
         key: ValueKey('dash_$_profileRefreshKey'),
         unreadCount: _unreadCount,
         onSessionExpired: _handleSessionExpired,
+        onRefreshUnread: _loadUnreadCount,
         onOpenQrTab: () => setState(() => _currentIndex = 1),
         onOpenNotifTab: () {
           setState(() => _currentIndex = 2);

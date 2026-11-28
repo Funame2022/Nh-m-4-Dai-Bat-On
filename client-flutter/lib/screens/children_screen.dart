@@ -11,6 +11,7 @@ import 'child_detail_screen.dart';
 class ChildrenScreen extends StatefulWidget {
   final int unreadCount;
   final Future<void> Function() onSessionExpired;
+  final Future<void> Function()? onRefreshUnread;
   final VoidCallback onOpenQrTab;
   final VoidCallback onOpenNotifTab;
   final VoidCallback onOpenProfileTab;
@@ -19,6 +20,7 @@ class ChildrenScreen extends StatefulWidget {
     super.key,
     required this.unreadCount,
     required this.onSessionExpired,
+    this.onRefreshUnread,
     required this.onOpenQrTab,
     required this.onOpenNotifTab,
     required this.onOpenProfileTab,
@@ -75,6 +77,7 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
 
   void _refresh() {
     _loadParentHeader();
+    widget.onRefreshUnread?.call();
     setState(() {
       _futureChildren = _loadChildren();
     });

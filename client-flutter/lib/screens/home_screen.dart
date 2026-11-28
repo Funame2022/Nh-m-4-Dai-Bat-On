@@ -199,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       StudentPassScreen(onSessionExpired: _handleSessionExpired),
       NotificationsScreen(
+        isActive: _currentIndex == 2,
         onSessionExpired: _handleSessionExpired,
         onUnreadChanged: (count) {
           if (mounted) setState(() => _unreadCount = count);
@@ -260,7 +261,6 @@ class _HomeScreenState extends State<HomeScreen> {
               selected: _currentIndex == 2,
               onTap: () {
                 setState(() => _currentIndex = 2);
-                _loadUnreadCount();
               },
             ),
             _NavItem(

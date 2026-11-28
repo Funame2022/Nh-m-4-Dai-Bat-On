@@ -7,11 +7,13 @@ import 'notification_settings_screen.dart';
 
 /// Màn hình Thông báo — ListView.builder + AlertDialog xác nhận xóa + SnackBar Hoàn tác
 class NotificationsScreen extends StatefulWidget {
+  final bool isActive;
   final Future<void> Function() onSessionExpired;
   final ValueChanged<int>? onUnreadChanged;
 
   const NotificationsScreen({
     super.key,
+    this.isActive = false,
     required this.onSessionExpired,
     this.onUnreadChanged,
   });
@@ -31,17 +33,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _futureThongBao = _fetchAndStore();
   }
 
-  Future<Map<String, dynamic>> _fetchAndStore() async {
+  @override
+  void didUpdateWidget(covariant NotificationsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _refreshAndClearBadge();
+    }
+  }
+
+  Future<void> _refreshAndClearBadge() async {
+    await _fetchAndStore(autoMarkRead: true);
+  }
+
+  Future<Map<String, dynamic>> _fetchAndStore({bool autoMarkRead = false}) async {
     try {
       final data = await ApiService.getThongBao(limit: 50);
       if (!mounted) return data;
       final list = (data['notifications'] as List?) ?? [];
+      final serverUnread =
+          int.tryParse(data['unreadCount']?.toString() ?? '') ?? 0;
+
       setState(() {
         _notifications = list;
         _loaded = true;
       });
-      widget.onUnreadChanged
-          ?.call(int.tryParse(data['unreadCount']?.toString() ?? '') ?? 0);
+
+      if ((autoMarkRead || widget.isActive) && serverUnread > 0) {
+        await ApiService.docTatCaThongBao();
+        if (!mounted) return data;
+        widget.onUnreadChanged?.call(0);
+      } else {
+        widget.onUnreadChanged?.call(serverUnread);
+      }
       return data;
     } on SessionExpiredException {
       await widget.onSessionExpired();

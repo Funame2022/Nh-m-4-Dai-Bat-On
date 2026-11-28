@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/ui_effects.dart';
+import 'child_detail_screen.dart';
 import 'notification_settings_screen.dart';
 
 /// Màn hình Thông báo — ListView.builder + AlertDialog xác nhận xóa + SnackBar Hoàn tác
@@ -77,6 +79,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _openNotificationTarget(
+    int index,
+    Map<String, dynamic> tb,
+    int id,
+    bool daDoc,
+  ) async {
+    if (!daDoc) {
+      await _markOneRead(index, id);
+    }
+    try {
+      final children = await ApiService.getChildren();
+      if (!mounted || children.isEmpty) return;
+
+      final targetHsId = int.tryParse(tb['hoc_sinh_id']?.toString() ?? '');
+      Map<String, dynamic> child =
+          Map<String, dynamic>.from(children.first as Map);
+      if (targetHsId != null) {
+        for (final c in children) {
+          final m = Map<String, dynamic>.from(c as Map);
+          if (int.tryParse(m['id']?.toString() ?? '') == targetHsId) {
+            child = m;
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        SmoothPageRoute(
+          page: ChildDetailScreen(
+            hocSinhId: int.tryParse(child['id']?.toString() ?? '') ?? 0,
+            hoTen: child['ho_ten']?.toString() ?? 'Học sinh',
+            anhUrl: child['anh_url']?.toString(),
+            tenLop: child['ten_lop']?.toString(),
+            tenTruong: child['ten_truong']?.toString(),
+            onSessionExpired: widget.onSessionExpired,
+          ),
+        ),
+      );
+    } on SessionExpiredException {
+      await widget.onSessionExpired();
+    } catch (_) {}
+  }
+
   Future<void> _markOneRead(int index, int id) async {
     try {
       await ApiService.docThongBao(id);
@@ -90,6 +137,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final unread =
           _notifications.where((tb) => tb['da_doc_luc'] == null).length;
       widget.onUnreadChanged?.call(unread);
+    } on SessionExpiredException {
+      await widget.onSessionExpired();
+    } catch (_) {}
+  }
+
+  Future<void> _openNotificationTarget(
+    int index,
+    Map<String, dynamic> tb,
+    int id,
+    bool daDoc,
+  ) async {
+    if (!daDoc) {
+      await _markOneRead(index, id);
+    }
+    try {
+      final children = await ApiService.getChildren();
+      if (!mounted || children.isEmpty) return;
+
+      final targetHsId = int.tryParse(tb['hoc_sinh_id']?.toString() ?? '');
+      Map<String, dynamic> child =
+          Map<String, dynamic>.from(children.first as Map);
+      if (targetHsId != null) {
+        for (final c in children) {
+          final m = Map<String, dynamic>.from(c as Map);
+          if (int.tryParse(m['id']?.toString() ?? '') == targetHsId) {
+            child = m;
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        SmoothPageRoute(
+          page: ChildDetailScreen(
+            hocSinhId: int.tryParse(child['id']?.toString() ?? '') ?? 0,
+            hoTen: child['ho_ten']?.toString() ?? 'Học sinh',
+            anhUrl: child['anh_url']?.toString(),
+            tenLop: child['ten_lop']?.toString(),
+            tenTruong: child['ten_truong']?.toString(),
+            onSessionExpired: widget.onSessionExpired,
+          ),
+        ),
+      );
     } on SessionExpiredException {
       await widget.onSessionExpired();
     } catch (_) {}
@@ -305,11 +397,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ],
                         ],
                       ),
-                      trailing: daDoc
-                          ? null
-                          : Icon(Icons.circle,
-                              color: scheme.primary, size: 10),
-                      onTap: daDoc ? null : () => _markOneRead(index, id),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!daDoc)
+                            Icon(Icons.circle, color: scheme.primary, size: 10),
+                          const SizedBox(width: 4),
+                          Icon(Icons.chevron_right_rounded,
+                              color: scheme.outline),
+                        ],
+                      ),
+                      onTap: () =>
+                          _openNotificationTarget(index, tb, id, daDoc),
                     ),
                   ),
                 );

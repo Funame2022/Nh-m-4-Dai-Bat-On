@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'api_service.dart';
-import 'home_screen.dart';
-import 'login_screen.dart';
+import 'services/api_service.dart';
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const BusCareParentApp());

@@ -212,12 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        child: KeyedSubtree(
-          key: ValueKey(_currentIndex),
-          child: screens[_currentIndex],
-        ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openQuickActions,

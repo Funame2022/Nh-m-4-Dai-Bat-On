@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
@@ -32,7 +33,7 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
   Map<String, dynamic>? _parent;
-  String? _avatarB64;
+  Uint8List? _avatarBytes;
 
   @override
   void initState() {
@@ -50,10 +51,16 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
   Future<void> _loadParentHeader() async {
     final user = await ApiService.getNguoiDungHienTai();
     final avatar = await ApiService.getParentAvatarBase64();
+    Uint8List? decoded;
+    if (avatar != null && avatar.isNotEmpty) {
+      try {
+        decoded = base64Decode(avatar);
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _parent = user;
-      _avatarB64 = avatar;
+      _avatarBytes = decoded;
     });
   }
 
@@ -180,11 +187,11 @@ class _ChildrenScreenState extends State<ChildrenScreen> {
                                             .withValues(alpha: 0.25),
                                       ),
                                       child: ClipOval(
-                                        child: (_avatarB64 != null &&
-                                                _avatarB64!.isNotEmpty)
+                                        child: _avatarBytes != null
                                             ? Image.memory(
-                                                base64Decode(_avatarB64!),
+                                                _avatarBytes!,
                                                 fit: BoxFit.cover,
+                                                gaplessPlayback: true,
                                               )
                                             : const Icon(Icons.person_rounded,
                                                 color: Colors.white, size: 28),

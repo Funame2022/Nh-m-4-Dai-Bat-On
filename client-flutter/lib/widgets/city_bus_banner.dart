@@ -42,18 +42,20 @@ class _CityBusBackdropState extends State<CityBusBackdrop>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: widget.height,
-      width: double.infinity,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) {
-          return CustomPaint(
-            painter: _VinBusCityPainter(
-              progress: widget.animateBus ? _ctrl.value : 0.45,
-            ),
-          );
-        },
+    return RepaintBoundary(
+      child: SizedBox(
+        height: widget.height,
+        width: double.infinity,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            return CustomPaint(
+              painter: _VinBusCityPainter(
+                progress: widget.animateBus ? _ctrl.value : 0.45,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

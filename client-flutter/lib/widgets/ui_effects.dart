@@ -42,9 +42,10 @@ class _ShimmerListPlaceholderState extends State<ShimmerListPlaceholder>
     final highlight =
         isDark ? const Color(0xFF2B4436) : const Color(0xFFF6FBF8);
 
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, _) {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) {
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -107,6 +108,7 @@ class _ShimmerListPlaceholderState extends State<ShimmerListPlaceholder>
           },
         );
       },
+      ),
     );
   }
 }

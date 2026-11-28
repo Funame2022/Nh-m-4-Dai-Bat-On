@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/city_bus_banner.dart';
 
-/// Màn hình Tài khoản — Hỗ trợ Thêm / Sửa / Xóa ảnh đại diện phụ huynh + Đổi tên + Đổi mật khẩu
+/// Màn hình Tài khoản — Tối ưu cache ảnh avatar + sửa lỗi crash đổi tên/mật khẩu
 class ProfileScreen extends StatefulWidget {
   final bool isDark;
   final Future<void> Function() onToggleTheme;
@@ -28,7 +29,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _nguoiDung;
-  String? _avatarB64;
+  Uint8List? _avatarBytes;
   bool _loading = true;
   final ImagePicker _picker = ImagePicker();
 
@@ -40,11 +41,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final cached = await ApiService.getNguoiDungHienTai();
-    final avatar = await ApiService.getParentAvatarBase64();
+    final avatarB64 = await ApiService.getParentAvatarBase64();
+    Uint8List? decoded;
+    if (avatarB64 != null && avatarB64.isNotEmpty) {
+      try {
+        decoded = base64Decode(avatarB64);
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _nguoiDung = cached;
-      _avatarB64 = avatar;
+      _avatarBytes = decoded;
       _loading = false;
     });
   }
@@ -53,16 +60,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final file = await _picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 400,
+        maxHeight: 400,
+        imageQuality: 75,
       );
       if (file == null) return;
       final bytes = await file.readAsBytes();
       final b64 = base64Encode(bytes);
       await ApiService.saveParentAvatarBase64(b64);
       if (!mounted) return;
-      setState(() => _avatarB64 = b64);
+      setState(() => _avatarBytes = bytes);
       widget.onProfileChanged?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -123,7 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _pickAvatar(ImageSource.camera);
               },
             ),
-            if (_avatarB64 != null && _avatarB64!.isNotEmpty)
+            if (_avatarBytes != null)
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFFDECEC),
@@ -138,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Navigator.pop(ctx);
                   await ApiService.clearParentAvatar();
                   if (!mounted) return;
-                  setState(() => _avatarB64 = null);
+                  setState(() => _avatarBytes = null);
                   widget.onProfileChanged?.call();
                 },
               ),
@@ -149,62 +156,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _showEditNameDialog() async {
-    final controller =
-        TextEditingController(text: _nguoiDung?['hoTen']?.toString() ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    final updated = await showDialog<bool>(
+    final newName = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Đổi họ tên'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            decoration: const InputDecoration(labelText: 'Họ và tên'),
-            validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Vui lòng nhập họ tên'
-                : null,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              try {
-                final err = await ApiService.updateProfileName(
-                    controller.text.trim());
-                if (!ctx.mounted) return;
-                if (err == null) {
-                  Navigator.pop(ctx, true);
-                } else {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text(err)),
-                  );
-                }
-              } on SessionExpiredException {
-                if (ctx.mounted) Navigator.pop(ctx, false);
-                await widget.onSessionExpired();
-              }
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (_) => _EditNameDialog(
+        initialName: _nguoiDung?['hoTen']?.toString() ?? '',
+        onSessionExpired: widget.onSessionExpired,
       ),
     );
 
-    controller.dispose();
-    if (updated == true && mounted) {
-      await _loadProfile();
+    if (newName != null && mounted) {
+      setState(() {
+        _nguoiDung = {
+          ...(_nguoiDung ?? {}),
+          'hoTen': newName,
+        };
+      });
       widget.onProfileChanged?.call();
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Đã cập nhật họ tên'),
+          content: Text('Đã cập nhật họ tên thành công!'),
           backgroundColor: AppTheme.emerald,
           behavior: SnackBarBehavior.floating,
         ),
@@ -213,75 +184,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _showChangePasswordDialog() async {
-    final oldCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
     final changed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Đổi mật khẩu'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: oldCtrl,
-                obscureText: true,
-                decoration:
-                    const InputDecoration(labelText: 'Mật khẩu hiện tại'),
-                validator: (v) => (v == null || v.isEmpty)
-                    ? 'Nhập mật khẩu hiện tại'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: newCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: 'Mật khẩu mới (tối thiểu 8 ký tự)'),
-                validator: (v) => (v == null || v.length < 8)
-                    ? 'Mật khẩu mới phải từ 8 ký tự'
-                    : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              try {
-                final err = await ApiService.changePassword(
-                  oldCtrl.text,
-                  newCtrl.text,
-                );
-                if (!ctx.mounted) return;
-                if (err == null) {
-                  Navigator.pop(ctx, true);
-                } else {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text(err)),
-                  );
-                }
-              } on SessionExpiredException {
-                if (ctx.mounted) Navigator.pop(ctx, false);
-                await widget.onSessionExpired();
-              }
-            },
-            child: const Text('Xác nhận'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (_) => _ChangePasswordDialog(
+        onSessionExpired: widget.onSessionExpired,
       ),
     );
 
-    oldCtrl.dispose();
-    newCtrl.dispose();
     if (changed == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -345,97 +255,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: _showAvatarOptions,
-                        child: Stack(
                           children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              child: Container(
-                                key: ValueKey(_avatarB64?.length ?? 0),
-                                width: 74,
-                                height: 74,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(22),
-                                  border:
-                                      Border.all(color: Colors.white, width: 2.5),
-                                  color: Colors.white.withValues(alpha: 0.25),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(19),
-                                  child: (_avatarB64 != null &&
-                                          _avatarB64!.isNotEmpty)
-                                      ? Image.memory(
-                                          base64Decode(_avatarB64!),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : const Icon(Icons.person_rounded,
-                                          size: 42, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: -2,
-                              bottom: -2,
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: const BoxDecoration(
-                                  color: AppTheme.warmOrange,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.camera_alt_rounded,
-                                    color: Colors.white, size: 14),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _nguoiDung?['hoTen']?.toString() ?? 'Phụ huynh',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _nguoiDung?['email']?.toString() ?? '',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 13),
-                            ),
-                            const SizedBox(height: 8),
-                            InkWell(
+                            GestureDetector(
                               onTap: _showAvatarOptions,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.22),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'Chạm để đổi ảnh đại diện',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: 74,
+                                    height: 74,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(22),
+                                      border: Border.all(
+                                          color: Colors.white, width: 2.5),
+                                      color: Colors.white
+                                          .withValues(alpha: 0.25),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(19),
+                                      child: _avatarBytes != null
+                                          ? Image.memory(
+                                              _avatarBytes!,
+                                              fit: BoxFit.cover,
+                                              gaplessPlayback: true,
+                                            )
+                                          : const Icon(Icons.person_rounded,
+                                              size: 42, color: Colors.white),
+                                    ),
                                   ),
-                                ),
+                                  Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: const BoxDecoration(
+                                        color: AppTheme.warmOrange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                          Icons.camera_alt_rounded,
+                                          color: Colors.white,
+                                          size: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _nguoiDung?['hoTen']?.toString() ??
+                                        'Phụ huynh',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _nguoiDung?['email']?.toString() ?? '',
+                                    style: const TextStyle(
+                                        color: Colors.white70, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  InkWell(
+                                    onTap: _showAvatarOptions,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.22),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Text(
+                                        'Chạm để đổi ảnh đại diện',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
                     ],
                   ),
                 ),
@@ -505,6 +416,221 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// Dialog riêng tự quản lý TextEditingController để không bao giờ crash khi đóng
+class _EditNameDialog extends StatefulWidget {
+  final String initialName;
+  final Future<void> Function() onSessionExpired;
+
+  const _EditNameDialog({
+    required this.initialName,
+    required this.onSessionExpired,
+  });
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final TextEditingController _controller;
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _saving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    final newName = _controller.text.trim();
+    try {
+      final err = await ApiService.updateProfileName(newName);
+      if (!mounted) return;
+      if (err == null) {
+        Navigator.pop(context, newName);
+      } else {
+        setState(() {
+          _saving = false;
+          _error = err;
+        });
+      }
+    } on SessionExpiredException {
+      if (mounted) Navigator.pop(context);
+      await widget.onSessionExpired();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Đổi họ tên'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _controller,
+              enabled: !_saving,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Họ và tên'),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Vui lòng nhập họ tên'
+                  : null,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Lưu'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Dialog riêng cho Đổi mật khẩu — tránh crash dispose controller
+class _ChangePasswordDialog extends StatefulWidget {
+  final Future<void> Function() onSessionExpired;
+
+  const _ChangePasswordDialog({required this.onSessionExpired});
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _oldCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _oldCtrl.dispose();
+    _newCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _saving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final err =
+          await ApiService.changePassword(_oldCtrl.text, _newCtrl.text);
+      if (!mounted) return;
+      if (err == null) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() {
+          _saving = false;
+          _error = err;
+        });
+      }
+    } on SessionExpiredException {
+      if (mounted) Navigator.pop(context, false);
+      await widget.onSessionExpired();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Đổi mật khẩu'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _oldCtrl,
+              enabled: !_saving,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: 'Mật khẩu hiện tại'),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Nhập mật khẩu hiện tại' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _newCtrl,
+              enabled: !_saving,
+              obscureText: true,
+              decoration: const InputDecoration(
+                  labelText: 'Mật khẩu mới (tối thiểu 8 ký tự)'),
+              validator: (v) => (v == null || v.length < 8)
+                  ? 'Mật khẩu mới phải từ 8 ký tự'
+                  : null,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Xác nhận'),
+        ),
+      ],
     );
   }
 }

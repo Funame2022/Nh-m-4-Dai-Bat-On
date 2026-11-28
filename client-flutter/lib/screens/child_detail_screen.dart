@@ -483,8 +483,9 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     final List<dynamic> lichSu =
         item['lich_su_diem_danh'] is List ? item['lich_su_diem_danh'] : [];
 
-    final chieuLabel =
-        chieu == 'DON_SANG' ? 'Đón buổi sáng' : 'Trả buổi chiều';
+    final chieuLabel = (chieu == 'DON' || chieu == 'DON_SANG')
+        ? 'Đón buổi sáng'
+        : 'Trả buổi chiều';
     final statusColor = _colorForStatus(trangThai);
     final statusLabel = _labelForStatus(trangThai);
 
@@ -498,7 +499,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
             Row(
               children: [
                 Icon(
-                  chieu == 'DON_SANG'
+                  (chieu == 'DON' || chieu == 'DON_SANG')
                       ? Icons.wb_sunny_outlined
                       : Icons.nights_stay_outlined,
                   color: scheme.primary,

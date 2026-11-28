@@ -49,8 +49,9 @@ class RouteDetailScreen extends StatelessWidget {
                 final gioDuKien = item['gio_du_kien']?.toString() ?? '';
                 final trangThai = item['trang_thai']?.toString() ?? 'CHUA_CHAY';
 
-                final chieuLabel =
-                    chieu == 'DON_SANG' ? 'Đón buổi sáng' : 'Trả buổi chiều';
+                final chieuLabel = (chieu == 'DON' || chieu == 'DON_SANG')
+                    ? 'Đón buổi sáng'
+                    : 'Trả buổi chiều';
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),

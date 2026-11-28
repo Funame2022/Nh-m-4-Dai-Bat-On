@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -36,22 +35,11 @@ class ChildDetailScreen extends StatefulWidget {
 
 class _ChildDetailScreenState extends State<ChildDetailScreen> {
   late Future<List<dynamic>> _futureTracking;
-  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _futureTracking = _loadTracking();
-    // Tự động cập nhật vị trí GPS mỗi 15 giây
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) _refresh(silent: true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _autoRefreshTimer?.cancel();
-    super.dispose();
   }
 
   Future<List<dynamic>> _loadTracking() async {

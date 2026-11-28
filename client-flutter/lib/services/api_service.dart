@@ -13,6 +13,7 @@ class SessionExpiredException implements Exception {
 
 class ApiService {
   static const String baseUrl = 'https://nh-m-4-dai-bat-on.onrender.com';
+  static const String logTag = 'BusCare_Nhom01';
   static const Duration _timeout = Duration(seconds: 90);
 
   // ─── Headers tự động gắn Token ────────────────────────────────────────────
@@ -305,35 +306,89 @@ class ApiService {
     throw Exception('Không thể lưu cài đặt thông báo');
   }
 
-  // ─── 9. Ghi chú một chiều tới bảo mẫu (lưu theo học sinh + ngày) ───────────
+  // ─── 9. Ghi chú một chiều tới bảo mẫu (ưu tiên API server, fallback cục bộ) ─
   static Future<List<Map<String, String>>> getNotesForChild(
       int hocSinhId) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('notes_hs_$hocSinhId');
-    if (raw == null || raw.isEmpty) return [];
-    final List list = jsonDecode(raw) as List;
-    return list
-        .map((e) => Map<String, String>.from(e as Map))
-        .toList();
+    final localNotes = (raw == null || raw.isEmpty)
+        ? <Map<String, String>>[]
+        : (jsonDecode(raw) as List)
+            .map((e) => Map<String, String>.from(e as Map))
+            .toList();
+
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$baseUrl/api/phu-huynh/ghi-chu?hocSinhId=$hocSinhId'),
+            headers: await _headers(),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final List serverList =
+            jsonDecode(utf8.decode(res.bodyBytes)) as List;
+        return serverList.map((e) {
+          final m = e as Map<String, dynamic>;
+          return {
+            'noiDung': m['noi_dung']?.toString() ?? m['noiDung']?.toString() ?? '',
+            'nguoiNhan': m['nguoi_nhan']?.toString() ?? 'Bảo mẫu',
+            'thoiGian': m['tao_luc']?.toString() ?? '',
+            'synced': 'true',
+          };
+        }).toList();
+      }
+    } catch (_) {}
+
+    return localNotes;
   }
 
-  static Future<void> addNoteForChild(
+  static Future<bool> addNoteForChild(
       int hocSinhId, String noiDung, String nguoiNhan) async {
-    final notes = await getNotesForChild(hocSinhId);
+    bool synced = false;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$baseUrl/api/phu-huynh/ghi-chu'),
+            headers: await _headers(),
+            body: jsonEncode({
+              'hocSinhId': hocSinhId,
+              'noiDung': noiDung,
+              'nguoiNhan': nguoiNhan,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        synced = true;
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('notes_hs_$hocSinhId');
+    final notes = (raw == null || raw.isEmpty)
+        ? <Map<String, String>>[]
+        : (jsonDecode(raw) as List)
+            .map((e) => Map<String, String>.from(e as Map))
+            .toList();
+
     notes.insert(0, {
       'noiDung': noiDung,
       'nguoiNhan': nguoiNhan,
       'thoiGian': DateTime.now().toIso8601String(),
+      'synced': synced ? 'true' : 'false',
     });
-    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('notes_hs_$hocSinhId', jsonEncode(notes));
+    return synced;
   }
 
   static Future<void> deleteNoteForChild(int hocSinhId, int index) async {
-    final notes = await getNotesForChild(hocSinhId);
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('notes_hs_$hocSinhId');
+    if (raw == null || raw.isEmpty) return;
+    final notes = (jsonDecode(raw) as List)
+        .map((e) => Map<String, String>.from(e as Map))
+        .toList();
     if (index >= 0 && index < notes.length) {
       notes.removeAt(index);
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('notes_hs_$hocSinhId', jsonEncode(notes));
     }
   }

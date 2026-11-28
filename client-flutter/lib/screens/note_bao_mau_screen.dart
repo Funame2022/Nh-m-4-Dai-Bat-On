@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
 /// Màn hình Nhắn tin một chiều tới bảo mẫu (ghi chú cho chuyến hôm nay) — yêu cầu Đề 7
 class NoteBaoMauScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
   final _noteController = TextEditingController();
   List<Map<String, String>> _notes = [];
   bool _loading = true;
+  bool _sending = false;
 
   @override
   void initState() {
@@ -47,19 +49,28 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
 
   Future<void> _sendNote() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _sending = true);
+
     final text = _noteController.text.trim();
-    await ApiService.addNoteForChild(
+    final synced = await ApiService.addNoteForChild(
       widget.hocSinhId,
       text,
       widget.tenTuyen != null ? 'Bảo mẫu (${widget.tenTuyen})' : 'Bảo mẫu xe',
     );
     if (!mounted) return;
     _noteController.clear();
+    setState(() => _sending = false);
     await _loadNotes();
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đã gửi ghi chú cho bảo mẫu chuyến hôm nay'),
+      SnackBar(
+        content: Text(
+          synced
+              ? 'Đã gửi ghi chú tới bảo mẫu trên hệ thống!'
+              : 'Đã lưu ghi chú cho chuyến hôm nay',
+        ),
+        backgroundColor: AppTheme.emerald,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -78,7 +89,7 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             child: const Text('Xóa'),
           ),
         ],
@@ -120,7 +131,7 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -129,14 +140,19 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Ghi chú một chiều cho chuyến hôm nay',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      const Row(
+                        children: [
+                          Icon(Icons.chat_rounded,
+                              color: AppTheme.emerald, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Ghi chú một chiều cho chuyến hôm nay',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _noteController,
                         maxLines: 3,
@@ -164,11 +180,25 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       FilledButton.icon(
-                        onPressed: _sendNote,
-                        icon: const Icon(Icons.send_rounded),
-                        label: const Text('Gửi ghi chú'),
+                        onPressed: _sending ? null : _sendNote,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.emerald,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.send_rounded),
+                        label: const Text('Gửi ghi chú cho bảo mẫu'),
                       ),
                     ],
                   ),
@@ -177,7 +207,7 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -204,22 +234,54 @@ class _NoteBaoMauScreenState extends State<NoteBaoMauScreen> {
                         itemCount: _notes.length,
                         itemBuilder: (context, index) {
                           final note = _notes[index];
+                          final isSynced = note['synced'] == 'true';
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: scheme.primaryContainer,
-                                child: Icon(Icons.chat_bubble_outline,
-                                    color: scheme.onPrimaryContainer,
-                                    size: 20),
+                                backgroundColor: AppTheme.emerald
+                                    .withValues(alpha: 0.14),
+                                child: const Icon(Icons.chat_bubble_outline,
+                                    color: AppTheme.emerald, size: 20),
                               ),
                               title: Text(note['noiDung'] ?? ''),
-                              subtitle: Text(
-                                '${note['nguoiNhan'] ?? ''} · ${_formatTime(note['thoiGian'] ?? '')}',
-                                style: const TextStyle(fontSize: 12),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${note['nguoiNhan'] ?? ''} · ${_formatTime(note['thoiGian'] ?? '')}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (isSynced
+                                              ? AppTheme.emerald
+                                              : AppTheme.warmOrange)
+                                          .withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      isSynced
+                                          ? 'Đã đồng bộ server'
+                                          : 'Đã lưu cho chuyến',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: isSynced
+                                            ? AppTheme.emerald
+                                            : AppTheme.warmOrange,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline),
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.redAccent),
                                 onPressed: () => _confirmDelete(index),
                               ),
                             ),
